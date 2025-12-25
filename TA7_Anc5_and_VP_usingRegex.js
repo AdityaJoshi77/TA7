@@ -13,24 +13,28 @@ function findVariantIdAnchor() {
     return null;
   }
 
-  const formRegex = /product[-_]+form/i;
+  const formRegex = /product.*form/i;
 
   const anchorInProductForm = anchors.find((el) => {
     const form = el.closest("form");
     if (!form) return false;
 
     const formId = form.getAttribute("id");
-    return formId && formRegex.test(formId);
+    if (formId && formRegex.test(formId)) return true;
+
+    // fallback: check class list
+    return Array.from(form.classList).some((cls) => formRegex.test(cls));
   });
 
   if (anchorInProductForm) {
-    console.log({
-      status: "Anchor Found",
-      anchor: anchorInProductForm,
-      parentForm: anchorInProductForm.closest("form"),
-      formId: anchorInProductForm.closest("form")?.id,
-      formRegex,
-    });
+    // SUCCESS MESSAGE:
+    // console.log({
+    //   status: "Anchor Found",
+    //   anchor: anchorInProductForm,
+    //   parentForm: anchorInProductForm.closest("form"),
+    //   formId: anchorInProductForm.closest("form")?.id,
+    //   formRegex,
+    // });
     return anchorInProductForm;
   }
 
@@ -76,10 +80,11 @@ function getCandidateContainer(node, recall = false) {
     candidate = node.parentElement;
   }
 
-  console.log({
-    Status: "Candidate container",
-    Data: candidate,
-  });
+  // SUCCESS MESSAGE:
+  //   console.log({
+  //     Status: "Candidate container",
+  //     Data: candidate,
+  //   });
 
   return {
     parent: candidate,
@@ -108,10 +113,15 @@ function getVariantPickerCandidates(mainContainerCandidate) {
     "options",
   ];
 
-    const regex = new RegExp(
-      `^(${array_A.join("|")})([-_]+)(${array_B.join("|")})$`,
-      "i"
-    );
+  //   const regex = new RegExp(
+  //     `^(${array_A.join("|")})([-_]+)(${array_B.join("|")})$`,
+  //     "i"
+  //   );
+
+  const regex = new RegExp(
+    `^(${array_A.join("|")})([-_]+)(${array_B.join("|")})([-_]+[a-z0-9]+)*$`,
+    "i"
+  );
 
   const matchedElements = Array.from(
     mainContainerCandidate.querySelectorAll("*")
@@ -124,10 +134,11 @@ function getVariantPickerCandidates(mainContainerCandidate) {
   });
 
   if (matchedElements.length) {
-    console.log({
-      status: "Found VariantPicker Candidates",
-      Data: matchedElements,
-    });
+    // SUCCESS MESSAGE:
+    // console.log({
+    //   status: "Found VariantPicker Candidates",
+    //   Data: matchedElements,
+    // });
 
     return matchedElements;
   }
@@ -173,14 +184,17 @@ function test() {
   }
 
   const targetData = {
-    parent: candidateObject.parent,
+    // parent: candidateObject.parent,
+    anchor,
+    parentForm: anchor.parentElement,
     mainContainerCandidates: variantPickerCandidates,
   };
 
-  console.log({
-    status: "[TA7] Passed",
-    data: targetData,
-  });
+  //   SUCCESS MESSAGE
+  //   console.log({
+  //     status: "[TA7] Passed",
+  //     data: targetData,
+  //   });
 
   return targetData;
 }

@@ -5,7 +5,7 @@ function findVariantIdAnchor() {
   // If this is found, we proceed ahead, if not, we revert to manual extraction.
 
   const anchors = Array.from(
-    document.querySelectorAll('input[name="id"]:not([class]), select[name="id"]:not([class])')
+    document.querySelectorAll('input[name="id"], select[name="id"]')
   );
 
   if (!anchors.length) {
@@ -14,14 +14,19 @@ function findVariantIdAnchor() {
   }
 
   // Prefer anchors inside a form
-  const anchorInForm = anchors.find((el) => el.closest("form"));
+  const formRegex = /^product[-_]+form/i;
+
+  const anchorInForm = anchors.find((el) => {
+    const form = el.closest("form");
+    return form && formRegex.test(form.id);
+  });
+
   console.log({
     Status: "Anchor Found",
     Data: anchorInForm || anchors[0],
   });
   return anchorInForm || anchors[0];
 }
-
 
 // STEP 2: Build the array of candidates which can possible hold the variant picker.
 function getCandidateContainer(maxDepth = 4) {

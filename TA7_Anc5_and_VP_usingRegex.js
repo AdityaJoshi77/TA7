@@ -27,14 +27,6 @@ function findVariantIdAnchor() {
   });
 
   if (anchorInProductForm) {
-    // SUCCESS MESSAGE:
-    // console.log({
-    //   status: "Anchor Found",
-    //   anchor: anchorInProductForm,
-    //   parentForm: anchorInProductForm.closest("form"),
-    //   formId: anchorInProductForm.closest("form")?.id,
-    //   formRegex,
-    // });
     return anchorInProductForm;
   }
 
@@ -80,12 +72,6 @@ function getParentNode(node, recall = false) {
     candidate = node.parentElement;
   }
 
-  // SUCCESS MESSAGE:
-  //   console.log({
-  //     Status: "Candidate container",
-  //     Data: candidate,
-  //   });
-
   return {
     parent: candidate,
     isBodyNext: candidate?.parentElement === document.body,
@@ -97,8 +83,7 @@ function getParentNode(node, recall = false) {
 // matches with phrases like variant-picker, option_selectors, etc.
 // most theme would resort to this kind of nomenclature.
 function getVariantPickerCandidates(parentNode, productJSON) {
-  // The smaller these two arrays array_A and array_B are, the better.
-  // Their lengths are proportional to our dependency on the theme, which we wish to reduce
+  
   const array_A = [
     "variant",
     "variants",
@@ -123,15 +108,13 @@ function getVariantPickerCandidates(parentNode, productJSON) {
     "block", // for testing purpose.
   ];
 
+  // The smaller these two arrays array_A and array_B are, the better.
+  // Their lengths are proportional to our dependency on the theme, which we wish to reduce
+
   const regex = new RegExp(
     `(${array_A.join("|")})([-_]+)(${array_B.join("|")})([-_]+[a-z0-9]+)*`,
     "i"
   );
-
-  // const regex = new RegExp(
-  //   `^(${array_A.join("|")})([-_]+)(${array_B.join("|")})([-_]+[a-z0-9]+)*$`,
-  //   "i"
-  // );
 
   const matchedElements = Array.from(parentNode.querySelectorAll("*")).filter(
     (el) => {
@@ -151,15 +134,7 @@ function getVariantPickerCandidates(parentNode, productJSON) {
     }
   );
 
-  if (matchedElements.length) {
-    // SUCCESS MESSAGE:
-    // console.log({
-    //   status: "Found VariantPicker Candidates",
-    //   Data: matchedElements,
-    // });
-
-    return matchedElements;
-  }
+  if (matchedElements.length) return matchedElements;
 
   return [];
 }
@@ -211,49 +186,6 @@ function findVariantPickerWithOptionLabels(
   if (matchedOptionNames.size === 0) return null;
 
   return null;
-}
-
-function findLowestCommonAncestor(nodes, maxDepth = 8) {
-  // if (!nodes || nodes.length < 2) return null;
-
-  // Build ancestor chains for each node
-  const ancestorChains = nodes.map((node) => {
-    const chain = [];
-    let current = node;
-    let depth = 0;
-
-    while (current && current !== document.body && depth < maxDepth) {
-      chain.push(current);
-      current = current.parentElement;
-      depth++;
-    }
-    return chain;
-  });
-
-  // Find the first ancestor common to all chains
-  for (const ancestor of ancestorChains[0]) {
-    if (ancestorChains.every((chain) => chain.includes(ancestor))) {
-      return ancestor;
-    }
-  }
-
-  return null;
-}
-
-function isValidVariantPicker(candidate, expectedOptionCount) {
-  if (!candidate) return false;
-
-  const radioGroups = new Set(
-    [...candidate.querySelectorAll('input[type="radio"]')]
-      .map((r) => r.name)
-      .filter(Boolean)
-  );
-
-  const selectCount = candidate.querySelectorAll("select").length;
-
-  const axisCount = radioGroups.size + selectCount;
-
-  return axisCount >= expectedOptionCount;
 }
 
 async function test() {
@@ -340,35 +272,24 @@ async function test() {
 
     countCandidatesChecked++; // for debugging purposes.
 
-    // NEW APPROACH:
     // Once a valid vp_candidate is found
     // Begin to look for the MVP inside it, rather than using the VPC list.
     if (testCandidate && testCandidate !== -1) {
       variantPickerHook = testCandidate;
       break;
     }
-
-    // OLD APPROACH:
-    // Keep checking the VPCs for the MVP, this will give the innermost node, that will be MVP
-
-    // if (testCandidate) {
-    //   if (testCandidate === -1) fieldSets.push(vp_candidate);
-    //   else {
-    //     finalVariantPicker = testCandidate;
-    //     finalVariantPickerFound = true;
-    //     // break; // Do not break at this point.
-    //     // The lower most testCandidate that contains both option wrapper labels
-    //     // will become the finalVariantPicker.
-    //   }
-    // }
   }
 
   let finalVariantPicker = findMVPRecursively(variantPickerHook, optionNames);
-  let fieldSets = Array.from(finalVariantPicker.children).filter((fieldSet_candidate) => {
-    let testFieldSet = findVariantPickerWithOptionLabels(fieldSet_candidate, optionNames);
-    if( testFieldSet === -1)
-      return true;
-  })
+  let fieldSets = Array.from(finalVariantPicker.children).filter(
+    (fieldSet_candidate) => {
+      let testFieldSet = findVariantPickerWithOptionLabels(
+        fieldSet_candidate,
+        optionNames
+      );
+      if (testFieldSet === -1) return true;
+    }
+  );
   let finalVariantPickerFound = false;
 
   const targetData = {

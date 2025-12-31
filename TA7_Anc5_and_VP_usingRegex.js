@@ -297,22 +297,18 @@ async function test() {
     // anchor,
     // productForm: anchor.parentElement,
 
-    // main TargetData:
-    // LCA,
-    fieldSets,
-    parentNode: candidateObject.parent,
-    parentFoundInAnchorMode: parentFoundInAnchorMode,
-    mainContainerCandidates: variantPickerCandidates,
-    variantPickerCandidatesChecked: countCandidatesChecked,
+    
+    // Precursor Data
+    // parentNode: candidateObject.parent,
+    // parentFoundInAnchorMode: parentFoundInAnchorMode,
+    // mainContainerCandidates: variantPickerCandidates,
+    // variantPickerCandidatesChecked: countCandidatesChecked,
     // selectedMainContainer: finalVariantPicker || variantPickerCandidates[0],
-    finalVariantPicker,
+    
+    // Main Target Data:
+    VariantPicker : finalVariantPicker,
+    Fieldsets : fieldSets
   };
-
-  //   SUCCESS MESSAGE
-  //   console.log({
-  //     status: "[TA7] Passed",
-  //     data: targetData,
-  //   });
 
   return targetData;
 }

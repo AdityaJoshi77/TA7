@@ -96,8 +96,7 @@ function getParentNode(node, recall = false) {
 // we find the element whose tagName, or one of the classes
 // matches with phrases like variant-picker, option_selectors, etc.
 // most theme would resort to this kind of nomenclature.
-function getVariantPickerCandidates(parentNode) {
-
+function getVariantPickerCandidates(parentNode, productJSON) {
   // The smaller these two arrays array_A and array_B are, the better.
   // Their lengths are proportional to our dependency on the theme, which we wish to reduce
   const array_A = [
@@ -121,7 +120,7 @@ function getVariantPickerCandidates(parentNode) {
     "container",
     "option",
     "options",
-    "block" // for testing purpose.
+    "block", // for testing purpose.
   ];
 
   const regex = new RegExp(
@@ -201,15 +200,15 @@ function findVariantPickerWithOptionLabels(
     }
   });
 
-  if (matchedOptionNames.size === 0) return null;
-
-  // Exactly one option axis → wrapper
-  if (matchedOptionNames.size === 1) return -1;
-
   // All option axes accounted for → picker
   if (matchedOptionNames.size === optionSet.size) {
     return mainContainerCandidate;
   }
+
+  // Exactly one option axis → wrapper
+  if (matchedOptionNames.size === 1) return -1;
+
+  if (matchedOptionNames.size === 0) return null;
 
   return null;
 }
@@ -274,12 +273,12 @@ async function test() {
     option.name.toLowerCase()
   );
 
-  // Find a stable parent, 
+  // Find a stable parent,
   // and look for eligible variant picker candidates in that parent
   let candidateObject = getParentNode(anchor, false);
   let parentFoundInAnchorMode = true;
   let variantPickerCandidates = getVariantPickerCandidates(
-    candidateObject.parent
+    candidateObject.parent, product
   );
 
   // if variant picker candidates are not found in the current parentNode
@@ -311,34 +310,28 @@ async function test() {
   // look for the labels for the option-wrappers in the variantPickerCandidates.
   let finalVariantPicker = null;
   let fieldSets = [];
+  let finalVariantPickerFound = false;
+  let countCandidatesChecked = 0;
+
   for (let variantPicker of variantPickerCandidates) {
     let testCandidate = findVariantPickerWithOptionLabels(
       variantPicker,
       optionNames
     );
 
+    countCandidatesChecked++;
+
     if (testCandidate) {
       if (testCandidate === -1) fieldSets.push(variantPicker);
       else {
         finalVariantPicker = testCandidate;
-        // break; // Do not break at this point. 
-        // The lower most testCandidate that contains both option wrapper labels 
-        // will become the finalVariantPicker. 
+        finalVariantPickerFound = true;
+        // break; // Do not break at this point.
+        // The lower most testCandidate that contains both option wrapper labels
+        // will become the finalVariantPicker.
       }
     }
   }
-
-  // let LCA = null;
-  // if (fieldSets.length === optionNames.length) {
-  //   console.log("LCA detection was called");
-  //   const derivedPicker = findLowestCommonAncestor(fieldSets);
-  //   LCA = derivedPicker;
-  //   if (isValidVariantPicker(derivedPicker, optionNames.length)) {
-  //     finalVariantPicker = derivedPicker;
-  //   }
-
-  //   finalVariantPicker = derivedPicker;
-  // }
 
   const targetData = {
     // For Debugging purposes:
@@ -351,6 +344,7 @@ async function test() {
     parentNode: candidateObject.parent,
     parentFoundInAnchorMode: parentFoundInAnchorMode,
     mainContainerCandidates: variantPickerCandidates,
+    variantPickerCandidatesChecked: countCandidatesChecked,
     // selectedMainContainer: finalVariantPicker || variantPickerCandidates[0],
     finalVariantPicker,
   };

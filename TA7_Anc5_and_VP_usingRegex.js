@@ -292,20 +292,22 @@ async function test() {
   let finalVariantPickerFound = false;
 
   const targetData = {
-    // For Debugging purposes:
-    // anchor,
-    // productForm: anchor.parentElement,
+    A__mainTargetData: {
+      VariantPicker: finalVariantPicker,
+      Fieldsets: fieldSets,
+    },
 
-    // Precursor Data
-    // parentNode: candidateObject.parent,
-    // parentFoundInAnchorMode: parentFoundInAnchorMode,
-    // mainContainerCandidates: variantPickerCandidates,
-    // variantPickerCandidatesChecked: countCandidatesChecked,
-    // selectedMainContainer: finalVariantPicker || variantPickerCandidates[0],
+    B__precursorData: {
+      parentNode: candidateObject.parent,
+      parentFoundInAnchorMode: parentFoundInAnchorMode,
+      mainContainerCandidates: variantPickerCandidates,
+      variantPickerCandidatesChecked: countCandidatesChecked,
+    },
 
-    // Main Target Data:
-    VariantPicker: finalVariantPicker,
-    Fieldsets: fieldSets,
+    C__anchorData: {
+      anchor: anchor,
+      productForm: anchor.parentElement,
+    }
   };
 
   return targetData;

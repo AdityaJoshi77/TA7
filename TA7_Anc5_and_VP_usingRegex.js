@@ -97,6 +97,9 @@ function getParentNode(node, recall = false) {
 // matches with phrases like variant-picker, option_selectors, etc.
 // most theme would resort to this kind of nomenclature.
 function getVariantPickerCandidates(parentNode) {
+
+  // The smaller these two arrays array_A and array_B are, the better.
+  // Their lengths are proportional to our dependency on the theme, which we wish to reduce
   const array_A = [
     "variant",
     "variants",
@@ -175,7 +178,9 @@ async function getProductData() {
 }
 
 // HELPER:
-// Look for labels, legends which are showing the option wrappers
+// Look for the presence of nodes whose textContent matches with the optionNames
+// productJSON. a mainContainerCandidate which has all the matching nodes is eligible to the'
+// MVP.
 function findVariantPickerWithOptionLabels(
   mainContainerCandidate,
   optionNamesInJSON
@@ -269,11 +274,16 @@ async function test() {
     option.name.toLowerCase()
   );
 
+  // Find a stable parent, 
+  // and look for eligible variant picker candidates in that parent
   let candidateObject = getParentNode(anchor, false);
   let parentFoundInAnchorMode = true;
   let variantPickerCandidates = getVariantPickerCandidates(
     candidateObject.parent
   );
+
+  // if variant picker candidates are not found in the current parentNode
+  // look for the same in a higher parentNode.
   while (
     candidateObject &&
     !variantPickerCandidates.length &&
@@ -286,6 +296,8 @@ async function test() {
     );
   }
 
+  // Failure to find the variant picker candidates
+  // INFERENCE : The current theme violates our fundamental assumptions
   if (!variantPickerCandidates.length) {
     console.log({
       status: "No variant picker found",
@@ -296,7 +308,7 @@ async function test() {
     return [];
   }
 
-  // look for the labels in the variantPickerCandidates.
+  // look for the labels for the option-wrappers in the variantPickerCandidates.
   let finalVariantPicker = null;
   let fieldSets = [];
   for (let variantPicker of variantPickerCandidates) {
@@ -309,7 +321,9 @@ async function test() {
       if (testCandidate === -1) fieldSets.push(variantPicker);
       else {
         finalVariantPicker = testCandidate;
-        // break;
+        // break; // Do not break at this point. 
+        // The lower most testCandidate that contains both option wrapper labels 
+        // will become the finalVariantPicker. 
       }
     }
   }

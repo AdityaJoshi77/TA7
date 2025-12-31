@@ -278,7 +278,8 @@ async function test() {
   let candidateObject = getParentNode(anchor, false);
   let parentFoundInAnchorMode = true;
   let variantPickerCandidates = getVariantPickerCandidates(
-    candidateObject.parent, product
+    candidateObject.parent,
+    product
   );
 
   // if variant picker candidates are not found in the current parentNode
@@ -296,7 +297,7 @@ async function test() {
   }
 
   // Failure to find the variant picker candidates
-  // INFERENCE : The current theme violates our fundamental assumptions
+  // INFERENCE : The current theme totally violates our fundamental assumptions
   if (!variantPickerCandidates.length) {
     console.log({
       status: "No variant picker found",
@@ -307,31 +308,68 @@ async function test() {
     return [];
   }
 
-  // look for the labels for the option-wrappers in the variantPickerCandidates.
-  let finalVariantPicker = null;
-  let fieldSets = [];
-  let finalVariantPickerFound = false;
-  let countCandidatesChecked = 0;
+  function findMVPRecursively(variantPickerHook, optionNamesInJSON) {
+    let hookChildren = Array.from(variantPickerHook.children);
+    let newHook = null;
+    for (let childNode of hookChildren) {
+      let testCandidate = findVariantPickerWithOptionLabels(
+        childNode,
+        optionNamesInJSON
+      );
+      if (testCandidate && testCandidate !== -1) {
+        newHook = childNode;
+        break;
+      }
+    }
 
-  for (let variantPicker of variantPickerCandidates) {
+    if (!newHook) return variantPickerHook;
+
+    return findMVPRecursively(newHook, optionNamesInJSON);
+  }
+
+  // find the VARIANT PICKER HOOK
+  // It is the first node where all the option-wrapper labels are found
+  // The search for the MVP will now be done in this hook node.
+  let countCandidatesChecked = 0;
+  let variantPickerHook;
+  for (let vp_candidate of variantPickerCandidates) {
     let testCandidate = findVariantPickerWithOptionLabels(
-      variantPicker,
+      vp_candidate,
       optionNames
     );
 
-    countCandidatesChecked++;
+    countCandidatesChecked++; // for debugging purposes.
 
-    if (testCandidate) {
-      if (testCandidate === -1) fieldSets.push(variantPicker);
-      else {
-        finalVariantPicker = testCandidate;
-        finalVariantPickerFound = true;
-        // break; // Do not break at this point.
-        // The lower most testCandidate that contains both option wrapper labels
-        // will become the finalVariantPicker.
-      }
+    // NEW APPROACH:
+    // Once a valid vp_candidate is found
+    // Begin to look for the MVP inside it, rather than using the VPC list.
+    if (testCandidate && testCandidate !== -1) {
+      variantPickerHook = testCandidate;
+      break;
     }
+
+    // OLD APPROACH:
+    // Keep checking the VPCs for the MVP, this will give the innermost node, that will be MVP
+
+    // if (testCandidate) {
+    //   if (testCandidate === -1) fieldSets.push(vp_candidate);
+    //   else {
+    //     finalVariantPicker = testCandidate;
+    //     finalVariantPickerFound = true;
+    //     // break; // Do not break at this point.
+    //     // The lower most testCandidate that contains both option wrapper labels
+    //     // will become the finalVariantPicker.
+    //   }
+    // }
   }
+
+  let finalVariantPicker = findMVPRecursively(variantPickerHook, optionNames);
+  let fieldSets = Array.from(finalVariantPicker.children).filter((fieldSet_candidate) => {
+    let testFieldSet = findVariantPickerWithOptionLabels(fieldSet_candidate, optionNames);
+    if( testFieldSet === -1)
+      return true;
+  })
+  let finalVariantPickerFound = false;
 
   const targetData = {
     // For Debugging purposes:

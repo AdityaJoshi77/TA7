@@ -83,7 +83,6 @@ function getParentNode(node, recall = false) {
 // matches with phrases like variant-picker, option_selectors, etc.
 // most theme would resort to this kind of nomenclature.
 function getVariantPickerCandidates(parentNode, productJSON) {
-  
   const array_A = [
     "variant",
     "variants",
@@ -188,6 +187,25 @@ function findVariantPickerWithOptionLabels(
   return null;
 }
 
+function findMVPRecursively(variantPickerHook, optionNamesInJSON) {
+  let hookChildren = Array.from(variantPickerHook.children);
+  let newHook = null;
+  for (let childNode of hookChildren) {
+    let testCandidate = findVariantPickerWithOptionLabels(
+      childNode,
+      optionNamesInJSON
+    );
+    if (testCandidate && testCandidate !== -1) {
+      newHook = childNode;
+      break;
+    }
+  }
+
+  if (!newHook) return variantPickerHook;
+
+  return findMVPRecursively(newHook, optionNamesInJSON);
+}
+
 async function test() {
   const anchor = findVariantIdAnchor();
   if (!anchor) {
@@ -240,25 +258,6 @@ async function test() {
     return [];
   }
 
-  function findMVPRecursively(variantPickerHook, optionNamesInJSON) {
-    let hookChildren = Array.from(variantPickerHook.children);
-    let newHook = null;
-    for (let childNode of hookChildren) {
-      let testCandidate = findVariantPickerWithOptionLabels(
-        childNode,
-        optionNamesInJSON
-      );
-      if (testCandidate && testCandidate !== -1) {
-        newHook = childNode;
-        break;
-      }
-    }
-
-    if (!newHook) return variantPickerHook;
-
-    return findMVPRecursively(newHook, optionNamesInJSON);
-  }
-
   // find the VARIANT PICKER HOOK
   // It is the first node where all the option-wrapper labels are found
   // The search for the MVP will now be done in this hook node.
@@ -297,17 +296,16 @@ async function test() {
     // anchor,
     // productForm: anchor.parentElement,
 
-    
     // Precursor Data
     // parentNode: candidateObject.parent,
     // parentFoundInAnchorMode: parentFoundInAnchorMode,
     // mainContainerCandidates: variantPickerCandidates,
     // variantPickerCandidatesChecked: countCandidatesChecked,
     // selectedMainContainer: finalVariantPicker || variantPickerCandidates[0],
-    
+
     // Main Target Data:
-    VariantPicker : finalVariantPicker,
-    Fieldsets : fieldSets
+    VariantPicker: finalVariantPicker,
+    Fieldsets: fieldSets,
   };
 
   return targetData;

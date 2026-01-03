@@ -107,15 +107,23 @@ function getVariantPickerCandidates(parentNode, productJSON) {
     "options",
     "block", // for testing purpose.
     "form", // for testing purpose.
+    "list", // for testing purpose.
   ];
 
   // The smaller these two arrays array_A and array_B are, the better.
   // Their lengths are proportional to our dependency on the theme, which we wish to reduce
 
+  // DEBUGGING:
   const regex = new RegExp(
     `(${array_A.join("|")})([-_]+)(${array_B.join("|")})([-_]+[a-z0-9]+)*`,
     "i"
   );
+
+  // PRODUCTION :
+  // const regex = new RegExp(
+  //   `(${array_A.join("|")})([-_]+)(${array_B.join("|")})([-_]+[a-z0-9]+)*`,
+  //   "i"
+  // );
 
   const matchedElements = Array.from(parentNode.querySelectorAll("*")).filter(
     (el) => {
@@ -213,10 +221,10 @@ function findMVPRecursively(variantPickerHook, optionNamesInJSON) {
     if (matchedOptionCount === optionNamesInJSON.length) {
       newHook = childNode;
 
-      // console.log({
-      //   variantPickerHook: variantPickerHook,
-      //   successor: newHook,
-      // });
+      console.log({
+        variantPickerHook: variantPickerHook,
+        successor: newHook,
+      });
 
       break;
     }
@@ -230,7 +238,121 @@ function findMVPRecursively(variantPickerHook, optionNamesInJSON) {
   return findMVPRecursively(newHook, optionNamesInJSON);
 }
 
-async function test() {
+function findVariantPickerBasedOnOptionAxes(
+  variantPickerCandidates,
+  optionNamesInJSON
+) {
+  const potentialVariantPickers = variantPickerCandidates.reduce(
+    (acc, vp_candidate) => {
+      const option_wrappers = Array.from(vp_candidate.children).filter(
+        (child) => variantPickerCandidates.includes(child)
+      );
+
+      if (option_wrappers.length === optionNamesInJSON.length) {
+        acc.push({ vp_candidate, option_wrappers });
+      }
+
+      return acc;
+    },
+    []
+  );
+
+  return potentialVariantPickers;
+}
+
+function findVariatPickersBasedOnOptionNamesInJSON(
+  variantPickerCandidates,
+  optionNames
+) {
+  // find the VARIANT PICKER HOOK
+  // It is the first node where all the option-wrapper labels are found
+  // The search for the MVP will now be done in this hook node.
+  let countCandidatesChecked = 0;
+  let variantPickerHook = variantPickerCandidates.length
+    ? variantPickerCandidates.find((vp_candidate) => {
+        const matchedOptionCount = findVariantPickerWithOptionLabels(
+          vp_candidate,
+          optionNames
+        );
+        return matchedOptionCount === optionNames.length;
+      })
+    : -1;
+
+  if (variantPickerHook === -1) {
+    console.log("The variantPickerCandidates are not populated yet");
+    return null;
+  }
+
+  let finalVariantPicker,
+    fieldSets = [];
+
+  if (variantPickerHook) {
+    finalVariantPicker = findMVPRecursively(variantPickerHook, optionNames);
+    fieldSets = Array.from(finalVariantPicker.children).filter(
+      (fieldSet_candidate) => {
+        let matchedOptionCount = findVariantPickerWithOptionLabels(
+          fieldSet_candidate,
+          optionNames
+        );
+        if (matchedOptionCount === 1) return true;
+      }
+    );
+  }
+
+  const variantPickerData = {
+    VariantPicker: finalVariantPicker,
+    Fieldsets: fieldSets,
+  };
+
+  return variantPickerData;
+}
+
+function detectOptionValues(vp_candidate, sampleOptionValue) {
+  const OPTION_VALUE_ATTRIBUTES = [
+    // Tier 1 — high-confidence, canonical
+    "value",
+    "data-option-value",
+    "data-option-value-id",
+    "data-option-id",
+    "data-value",
+    "data-value-id",
+    "data-variant-id",
+    "data-variant",
+    "data-selected-value",
+
+    // Tier 2 — handles / normalized keys
+    "data-value-handle",
+    "data-option-handle",
+    "data-handle",
+    "data-option-key",
+    "data-key",
+
+    // Tier 3 — generic but meaningful
+    "data-option",
+    "data-option-index",
+    "data-index",
+    "data-name",
+    "data-current-value",
+
+    // Tier 4 — accessibility / framework-driven
+    "aria-label",
+    "aria-valuetext",
+    "name",
+  ];
+
+  for (let fs_cand of vp_candidate.option_wrappers) {
+    for (let ov_attribute of OPTION_VALUE_ATTRIBUTES) {
+      const selector = `[${ov_attribute}="${CSS.escape(sampleOptionValue)}"]`;
+      const dataValueFound = fs_cand.querySelector(selector);
+
+      if (dataValueFound) return true; // the fieldset had some element that had the sampleOptionValue supplied, our variantPicker.
+    }
+  }
+
+  return false; // no fieldset candidate in the vp_candidate has any attribute holding the sampleOptionValue, not our variantPicker
+}
+
+async function test(useOptionNames = true) {
   const anchor = findVariantIdAnchor();
 
   // Failure to find the anchor
@@ -285,52 +407,31 @@ async function test() {
     return [];
   }
 
-  // find the VARIANT PICKER HOOK
-  // It is the first node where all the option-wrapper labels are found
-  // The search for the MVP will now be done in this hook node.
-  let countCandidatesChecked = 0;
-  let variantPickerHook = variantPickerCandidates.length
-    ? variantPickerCandidates.find((vp_candidate) => {
-        const matchedOptionCount = findVariantPickerWithOptionLabels(
-          vp_candidate,
-          optionNames
-        );
-        return matchedOptionCount === optionNames.length;
-      })
-    : -1;
-
-  if (variantPickerHook === -1) {
-    console.log("The variantPickerCandidates are not populated yet");
-    return null;
-  }
-
-  let finalVariantPicker,
-    fieldSets = [];
-
-  if (variantPickerHook) {
-    finalVariantPicker = findMVPRecursively(variantPickerHook, optionNames);
-    fieldSets = Array.from(finalVariantPicker.children).filter(
-      (fieldSet_candidate) => {
-        let matchedOptionCount = findVariantPickerWithOptionLabels(
-          fieldSet_candidate,
-          optionNames
-        );
-        if (matchedOptionCount === 1) return true;
-      }
+  let variantPickerData, targetData, finalVariantPickerTest = null;
+  if (useOptionNames)
+    variantPickerData = findVariatPickersBasedOnOptionNamesInJSON(
+      variantPickerCandidates,
+      optionNames
     );
+  else {
+    variantPickerData = findVariantPickerBasedOnOptionAxes(
+      variantPickerCandidates,
+      optionNames
+    );
+
+    let optionValueRacks = product.options.map(option => option.values);
+
+    finalVariantPickerTest = variantPickerData.find((item) => detectOptionValues(item, optionValueRacks[0][0]));
   }
 
-  const targetData = {
-    A__mainTargetData: {
-      VariantPicker: finalVariantPicker,
-      Fieldsets: fieldSets,
-    },
-
+  targetData = {
+    A__finalVariantPicker : finalVariantPickerTest,
+    A__mainTargetData: variantPickerData,
     B__precursorData: {
       parentNode: candidateObject.parent,
       parentFoundInAnchorMode: parentFoundInAnchorMode,
       mainContainerCandidates: variantPickerCandidates,
-      variantPickerCandidatesChecked: countCandidatesChecked,
+      // variantPickerCandidatesChecked: countCandidatesChecked,
     },
 
     C__anchorData: {
@@ -338,11 +439,10 @@ async function test() {
       productForm: anchor.parentElement,
     },
   };
-
   return targetData;
 }
 
-test();
+await test(false);
 
 // what happens when option names in the productJSON and those on the DOM are
 // in different languages.

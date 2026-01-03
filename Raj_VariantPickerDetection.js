@@ -70,8 +70,8 @@ const testAutoDetection = async (productLink, mainContainer) => {
     // find elements where productData.options[0].values[] are present
     const options = productData.options;
 
-    let tagsToCheck = ['input[type="radio"]', 'option', 'button', 'a', 'span', 'div', 'label'];
-    let dataAttributesToCheck = ['data-option-id', 'data-option-value', 'value', 'data-value', 'orig-value'];
+    let tagsToCheck = ['input[type="radio"]', 'option', 'button', 'a', 'span', 'div', 'label', 'li'];
+    let dataAttributesToCheck = ['data-option-id', 'data-option-value', 'value', 'data-value', 'orig-value', 'aria-label', 'aria-value'];
     let extrasObj = {};
 
     let selectors = [];

@@ -345,7 +345,12 @@ function detectOptionValues(vp_candidate, sampleOptionValue) {
       const selector = `[${ov_attribute}="${CSS.escape(sampleOptionValue)}"]`;
       const dataValueFound = fs_cand.querySelector(selector);
 
-      if (dataValueFound) return true; // the fieldset had some element that had the sampleOptionValue supplied, our variantPicker.
+      if (dataValueFound) {
+        return {
+          selectorElement : dataValueFound,
+          valueMatched: selector
+        }; // the fieldset had some element that had the sampleOptionValue supplied, our variantPicker.
+      }
     }
   }
 
@@ -407,7 +412,9 @@ async function test(useOptionNames = true) {
     return [];
   }
 
-  let variantPickerData, targetData, finalVariantPickerTest = null;
+  let variantPickerData,
+    targetData,
+    finalVariantPickerTest = null;
   if (useOptionNames)
     variantPickerData = findVariatPickersBasedOnOptionNamesInJSON(
       variantPickerCandidates,
@@ -419,13 +426,21 @@ async function test(useOptionNames = true) {
       optionNames
     );
 
-    let optionValueRacks = product.options.map(option => option.values);
+    let optionValueRacks = product.options.map((option) => option.values);
+    finalVariantPickerTest = variantPickerData.find((item) => {
+      let matchedSelector = detectOptionValues(item, optionValueRacks[0][0]);
+      if(matchedSelector){
+        item.matchedDataAttribute = matchedSelector;
+        return true;
+      }
 
-    finalVariantPickerTest = variantPickerData.find((item) => detectOptionValues(item, optionValueRacks[0][0]));
+      return false;
+    }
+    );
   }
 
   targetData = {
-    A__finalVariantPicker : finalVariantPickerTest,
+    A__finalVariantPicker: finalVariantPickerTest,
     A__mainTargetData: variantPickerData,
     B__precursorData: {
       parentNode: candidateObject.parent,

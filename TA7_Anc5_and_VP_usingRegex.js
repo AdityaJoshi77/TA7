@@ -13,36 +13,38 @@ function findVariantIdAnchor() {
     return null;
   }
 
-  const formRegex = /product[-_]*.*[-_]*form/i;
+  const productFormRegex = /product[-_]*.*[-_]*form/i;
 
-  const anchorInProductForm = anchors.find((el) => {
+  const anchorProductForm = anchors.find((el) => {
     const form = el.closest("form");
     if (!form) return false;
 
-    const formId = form.getAttribute("id");
-    if (formId && formRegex.test(formId)) return true;
-
-    // fallback: check class list
-    return Array.from(form.classList).some((cls) => formRegex.test(cls));
+    return formMatchesRegex(form, productFormRegex);
   });
 
-  if (anchorInProductForm) {
-    return anchorInProductForm;
+  if (anchorProductForm) {
+    return anchorProductForm;
   }
 
-  const anchorDataForDebugging = anchors.map((anchor) => ({
-    anchor,
-    parentElement: anchor.parentElement,
-    closestForm: anchor.closest("form"),
-    closestFormId: anchor.closest("form")?.id,
-  }));
-
   console.log({
-    status: "Failed to find anchor",
+    status: "Failed to find variantIdAnchorProductForm",
     data: anchorDataForDebugging,
   });
 
   return null;
+}
+
+// HELPER:
+// To find a match for the productFormRegex in the findVariantIdAnchor()
+function formMatchesRegex(form, productFormRegex) {
+  if (!form || !form.attributes) return false;
+
+  return Array.from(form.attributes).some((attr) => {
+    // ignore noisy attributes that are unlikely to encode intent
+    if (attr.name === "style") return false;
+
+    return productFormRegex.test(attr.value);
+  });
 }
 
 // HELPER:
@@ -171,72 +173,6 @@ async function getProductData(ta7_debug = false) {
 // Look for the presence of nodes whose textContent matches with the optionNames
 // productJSON. a mainContainerCandidate which has all the matching nodes is eligible to the'
 // MVP.
-function findVariantPickerWithOptionLabels(
-  mainContainerCandidate,
-  optionNamesInJSON
-) {
-  const optionSet = new Set(optionNamesInJSON.map((o) => o.toLowerCase()));
-
-  const matchedOptionNames = new Set();
-
-  Array.from(mainContainerCandidate.querySelectorAll("*")).forEach((el) => {
-    const text = el.textContent?.toLowerCase().trim();
-    if (!text) return;
-
-    for (const option of optionSet) {
-      if (
-        text === option ||
-        text.startsWith(option + ":") ||
-        text.split(" ")[0] === option
-      ) {
-        matchedOptionNames.add(option);
-        break;
-      }
-    }
-  });
-
-  // checking the optionNames in JSON and as matched in the candidate "größe"
-  // console.log({
-  //   vp_candidate: mainContainerCandidate,
-  //   optionSet,
-  //   matchedOptionNames,
-  // });
-
-  return matchedOptionNames.size;
-}
-
-function findMVPRecursively(variantPickerHook, optionNamesInJSON) {
-  if (!variantPickerHook) {
-    console.log("Variant Picker Hook is undefined", variantPickerHook);
-    return null;
-  }
-
-  let hookChildren = Array.from(variantPickerHook.children);
-  let newHook = null;
-  for (let childNode of hookChildren) {
-    let matchedOptionCount = findVariantPickerWithOptionLabels(
-      childNode,
-      optionNamesInJSON
-    );
-    if (matchedOptionCount === optionNamesInJSON.length) {
-      newHook = childNode;
-
-      console.log({
-        variantPickerHook: variantPickerHook,
-        successor: newHook,
-      });
-
-      break;
-    }
-  }
-
-  if (!newHook)
-    return optionNamesInJSON.length > 1
-      ? variantPickerHook
-      : variantPickerHook.parentElement;
-
-  return findMVPRecursively(newHook, optionNamesInJSON);
-}
 
 function findVariantPickerBasedOnOptionAxes(
   variantPickerCandidates,
@@ -260,54 +196,7 @@ function findVariantPickerBasedOnOptionAxes(
   return potentialVariantPickers;
 }
 
-function findVariatPickersBasedOnOptionNamesInJSON(
-  variantPickerCandidates,
-  optionNames
-) {
-  // find the VARIANT PICKER HOOK
-  // It is the first node where all the option-wrapper labels are found
-  // The search for the MVP will now be done in this hook node.
-  let countCandidatesChecked = 0;
-  let variantPickerHook = variantPickerCandidates.length
-    ? variantPickerCandidates.find((vp_candidate) => {
-        const matchedOptionCount = findVariantPickerWithOptionLabels(
-          vp_candidate,
-          optionNames
-        );
-        return matchedOptionCount === optionNames.length;
-      })
-    : -1;
-
-  if (variantPickerHook === -1) {
-    console.log("The variantPickerCandidates are not populated yet");
-    return null;
-  }
-
-  let finalVariantPicker,
-    fieldSets = [];
-
-  if (variantPickerHook) {
-    finalVariantPicker = findMVPRecursively(variantPickerHook, optionNames);
-    fieldSets = Array.from(finalVariantPicker.children).filter(
-      (fieldSet_candidate) => {
-        let matchedOptionCount = findVariantPickerWithOptionLabels(
-          fieldSet_candidate,
-          optionNames
-        );
-        if (matchedOptionCount === 1) return true;
-      }
-    );
-  }
-
-  const variantPickerData = {
-    VariantPicker: finalVariantPicker,
-    Fieldsets: fieldSets,
-  };
-
-  return variantPickerData;
-}
-
-function detectOptionValues(vp_candidate, sampleOptionValue) {
+function detectOptionValues_2(vp_candidate, optionCount, optionValueRack) {
   const OPTION_VALUE_ATTRIBUTES = [
     // Tier 1 — high-confidence, canonical
     "value",
@@ -340,21 +229,74 @@ function detectOptionValues(vp_candidate, sampleOptionValue) {
     "name",
   ];
 
-  for (let fs_cand of vp_candidate.option_wrappers) {
-    for (let ov_attribute of OPTION_VALUE_ATTRIBUTES) {
-      const selector = `[${ov_attribute}="${CSS.escape(sampleOptionValue)}"]`;
-      const dataValueFound = fs_cand.querySelector(selector);
+  let finalSelectorResult;
 
-      if (dataValueFound) {
-        return {
-          selectorElement : dataValueFound,
-          valueMatched: selector
-        }; // the fieldset had some element that had the sampleOptionValue supplied, our variantPicker.
+  if (optionCount > 1) {
+    let selectors = [],
+      dataValuesMatched = [];
+
+    for (let optionValue of optionValueRack) {
+      for (let fs_cand of vp_candidate.option_wrappers) {
+        for (let ov_attribute of OPTION_VALUE_ATTRIBUTES) {
+          const attributeSelector = `[${ov_attribute}="${CSS.escape(
+            optionValue
+          )}"]`;
+          const dataValueFound = fs_cand.querySelector(attributeSelector);
+          if (dataValueFound) {
+            selectors.push(dataValueFound);
+            dataValuesMatched.push(attributeSelector);
+          }
+        }
       }
     }
+
+    finalSelectorResult = {
+      selectors,
+      dataValuesMatched,
+    };
+  } else {
+    let selectors = [],
+      dataValuesMatched = [];
+    let fs_cand = vp_candidate.option_wrappers[0];
+
+    // console.log(fs_cand, optionValueRack);
+
+    for (let optionValue of optionValueRack) {
+      for (let ov_attribute of OPTION_VALUE_ATTRIBUTES) {
+        const attributeSelector = `[${ov_attribute}="${CSS.escape(
+          optionValue
+        )}"]`;
+        const dataValueFound = fs_cand.querySelector(attributeSelector);
+        if (dataValueFound) {
+          selectors.push(dataValueFound);
+          dataValuesMatched.push(attributeSelector);
+        }
+      }
+    }
+
+    finalSelectorResult = {
+      selectors,
+      dataValuesMatched,
+    };
   }
 
-  return false; // no fieldset candidate in the vp_candidate has any attribute holding the sampleOptionValue, not our variantPicker
+  if (finalSelectorResult) {
+    return finalSelectorResult;
+  }
+
+  return false;
+}
+
+// HELPER:
+// Normalization of data-* attribute values
+function normalizeValue(value) {
+  return value
+    .toLowerCase()
+    .trim()
+    .normalize("NFKD") // handle accents
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-") // spaces, symbols → hyphen
+    .replace(/^-+|-+$/g, "");
 }
 
 async function test(useOptionNames = true) {
@@ -365,7 +307,7 @@ async function test(useOptionNames = true) {
   if (!anchor) {
     const statusObject = {
       status: "[TA7] Failed",
-      cause: "variantID anchor not found",
+      cause: "variantID anchorForm not found",
     };
     console.log(statusObject);
     return statusObject;
@@ -404,40 +346,39 @@ async function test(useOptionNames = true) {
   // INFERENCE : The variant picker regex might be insufficient
   if (!variantPickerCandidates.length) {
     console.log({
-      status: "No variant picker found",
-      cause: candidateObject.isBodyNext ? "Body hit" : "Recheck Anchor",
+      status: "[TA7 failed] : No variant picker found",
+      cause: candidateObject.isBodyNext ? "Body hit" : "Fault in Anchor",
       anchor,
       parent: candidateObject.parent,
     });
     return [];
   }
 
-  let variantPickerData,
-    targetData,
-    finalVariantPickerTest = null;
-  if (useOptionNames)
-    variantPickerData = findVariatPickersBasedOnOptionNamesInJSON(
-      variantPickerCandidates,
-      optionNames
-    );
-  else {
-    variantPickerData = findVariantPickerBasedOnOptionAxes(
-      variantPickerCandidates,
-      optionNames
-    );
+  let variantPickerData, targetData, finalVariantPickerTest = null;
 
-    let optionValueRacks = product.options.map((option) => option.values);
-    finalVariantPickerTest = variantPickerData.find((item) => {
-      let matchedSelector = detectOptionValues(item, optionValueRacks[0][0]);
-      if(matchedSelector){
-        item.matchedDataAttribute = matchedSelector;
-        return true;
-      }
+  variantPickerData = findVariantPickerBasedOnOptionAxes(
+    variantPickerCandidates,
+    optionNames
+  );
 
-      return false;
+  let newOptionValueRack =
+    product.options.length > 1
+      ? product.options.map((option) => option.values[0])
+      : product.options[0].values;
+
+  finalVariantPickerTest = variantPickerData.find((item) => {
+    let finalSelectorResult = detectOptionValues_2(
+      item,
+      product.options.length,
+      newOptionValueRack
+    );
+    if (finalSelectorResult) {
+      item.selectorData = finalSelectorResult;
+      return true;
     }
-    );
-  }
+
+    return false;
+  });
 
   targetData = {
     A__finalVariantPicker: finalVariantPickerTest,
@@ -446,7 +387,6 @@ async function test(useOptionNames = true) {
       parentNode: candidateObject.parent,
       parentFoundInAnchorMode: parentFoundInAnchorMode,
       mainContainerCandidates: variantPickerCandidates,
-      // variantPickerCandidatesChecked: countCandidatesChecked,
     },
 
     C__anchorData: {
@@ -458,6 +398,3 @@ async function test(useOptionNames = true) {
 }
 
 await test(false);
-
-// what happens when option names in the productJSON and those on the DOM are
-// in different languages.

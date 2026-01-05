@@ -224,12 +224,14 @@ function detectOptionValues_2(vp_candidate, optionCount, optionValueRack) {
     "data-current-value",
 
     // Tier 4 — accessibility / framework-driven
+    "orig-value",
     "aria-label",
     "aria-valuetext",
     "name",
   ];
 
   let finalSelectorResult;
+  let matchedAttributes = new Set();
 
   if (optionCount > 1) {
     let selectors = [],
@@ -243,8 +245,10 @@ function detectOptionValues_2(vp_candidate, optionCount, optionValueRack) {
           )}"]`;
           const dataValueFound = fs_cand.querySelector(attributeSelector);
           if (dataValueFound) {
+            matchedAttributes.add(ov_attribute);
             selectors.push(dataValueFound);
             dataValuesMatched.push(attributeSelector);
+            // break;
           }
         }
       }
@@ -253,6 +257,7 @@ function detectOptionValues_2(vp_candidate, optionCount, optionValueRack) {
     finalSelectorResult = {
       selectors,
       dataValuesMatched,
+      matchedAttributes
     };
   } else {
     let selectors = [],
@@ -268,8 +273,10 @@ function detectOptionValues_2(vp_candidate, optionCount, optionValueRack) {
         )}"]`;
         const dataValueFound = fs_cand.querySelector(attributeSelector);
         if (dataValueFound) {
+          matchedAttributes.add(ov_attribute);
           selectors.push(dataValueFound);
           dataValuesMatched.push(attributeSelector);
+          // break;
         }
       }
     }
@@ -277,6 +284,7 @@ function detectOptionValues_2(vp_candidate, optionCount, optionValueRack) {
     finalSelectorResult = {
       selectors,
       dataValuesMatched,
+      matchedAttributes
     };
   }
 
@@ -299,7 +307,7 @@ function normalizeValue(value) {
     .replace(/^-+|-+$/g, "");
 }
 
-async function test(useOptionNames = true) {
+async function test() {
   const anchor = findVariantIdAnchor();
 
   // Failure to find the anchor
@@ -354,7 +362,9 @@ async function test(useOptionNames = true) {
     return [];
   }
 
-  let variantPickerData, targetData, finalVariantPickerTest = null;
+  let variantPickerData,
+    targetData,
+    finalVariantPickerTest = null;
 
   variantPickerData = findVariantPickerBasedOnOptionAxes(
     variantPickerCandidates,
@@ -380,6 +390,11 @@ async function test(useOptionNames = true) {
     return false;
   });
 
+  // For cross-checking
+  if (window.CAMOUFLAGEE === "object")
+    finalVariantPickerTest.camouflage_selectors =
+      window.CAMOUFLAGEE.items[0].selectors;
+
   targetData = {
     A__finalVariantPicker: finalVariantPickerTest,
     A__mainTargetData: variantPickerData,
@@ -397,4 +412,11 @@ async function test(useOptionNames = true) {
   return targetData;
 }
 
-await test(false);
+await test();
+
+
+// The detectOptionValues_2 has only confirmed the correctness of the variant-picker
+// we now need another function to 
+// 1. place the selectors in their corresponding option-wrappers,
+// 2. Filter out the correct selectors if there are strays in the selectors list.
+// QUESTION TO ADDRESS : How would you know that which selector is correct ? 

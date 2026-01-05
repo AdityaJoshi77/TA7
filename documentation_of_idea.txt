@@ -1,0 +1,28 @@
+
+/* DOCUMENTATION OF APPROACH : 
+1. Find the <form> which :
+	a. Holds the [name = "id"] input/select element
+	b. has any attribute whose value gives a match for the regex productFormRegex = /product[-_]*.*[-_]*form/i; 
+
+	This <form> is now your anchor (productFormAnchor)
+
+2. Once this anchor is found, climb upto 4 parents to get a stable vantage point. We will now search for the variant picker inside it.
+	Why? : 
+	- the actual variant picker and the productFormAnchor will be in close vicinity and will have their common parent close to them, generally the 4th or 5th ancestor at max. 
+	- So we get to this point to start our search for the variant picker. 
+
+3. Once you get to this vantage point (the parentNode), we will look inward for those elements whose tagNames or one of the classes match with the variant picker Regex. 
+	Basis of logic : Any theme developer would have to keep a track of the variant picker, so they will use tagNames/classes on the variant-picker and its fieldsets which will help distinguish the variant picker easily, both for the javaScript, and for the developers. 
+
+4. All the elements which give a match for the variant-picker regex will be collected in a mainContainerCandidates array. One of these is certainly our variant picker. 
+
+5. Now, within the mainContainerCandidates, we look for those candidates which have exactly as many other mainContainerCandidates as their direct children as there are options in the productJSON (which is fetched early on in the logic). 
+	Basis of Logic : The option-wrappers will also give a match for the variant-picker regex (by design), so they are also mainContainerCandidates from the code's p.o.v. So, a valid variant picker will not have more than 'n' other mainContainerCandidates, where 'n' is the number of options in the product. 
+
+6. Once we filter out these potentially valid candidates from the mainContainer List, we then check whether a given variant picker has elements which have attributes which hold the option values.
+	a. If there are more than one option in the product, we look for the element for the attributes which match for the first value of each option axis.
+	b. If the product has only one option, we look for the candidate which gives a match for all the values of the options
+
+At this moment, we will have our final variant picker, with its fieldsets, and its selectors. 
+
+*/

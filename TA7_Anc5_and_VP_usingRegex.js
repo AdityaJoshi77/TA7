@@ -257,7 +257,7 @@ function detectOptionValues_2(vp_candidate, optionCount, optionValueRack) {
     finalSelectorResult = {
       selectors,
       dataValuesMatched,
-      matchedAttributes
+      matchedAttributes,
     };
   } else {
     let selectors = [],
@@ -284,7 +284,7 @@ function detectOptionValues_2(vp_candidate, optionCount, optionValueRack) {
     finalSelectorResult = {
       selectors,
       dataValuesMatched,
-      matchedAttributes
+      matchedAttributes,
     };
   }
 
@@ -391,7 +391,7 @@ async function test() {
   });
 
   // For cross-checking
-  if (window.CAMOUFLAGEE === "object")
+  if (window.CAMOUFLAGEE)
     finalVariantPickerTest.camouflage_selectors =
       window.CAMOUFLAGEE.items[0].selectors;
 
@@ -414,9 +414,11 @@ async function test() {
 
 await test();
 
-
 // The detectOptionValues_2 has only confirmed the correctness of the variant-picker
-// we now need another function to 
+// we now need another function to
 // 1. place the selectors in their corresponding option-wrappers,
 // 2. Filter out the correct selectors if there are strays in the selectors list.
-// QUESTION TO ADDRESS : How would you know that which selector is correct ? 
+// 3. Also, instead of option values, variantIds are used in the data-* values of the     selectors. How would you tackle that issue ? 
+// QUESTION TO ADDRESS : How would you know that which selector is correct ?
+
+

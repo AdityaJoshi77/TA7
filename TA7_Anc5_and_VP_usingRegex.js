@@ -232,11 +232,10 @@ function detectOptionValues_2(vp_candidate, optionCount, optionValueRack) {
 
   let finalSelectorResult;
   let matchedAttributes = new Set();
+  let selectors = new Set();
+  let dataValuesMatched = [];
 
   if (optionCount > 1) {
-    let selectors = [],
-      dataValuesMatched = [];
-
     for (let optionValue of optionValueRack) {
       for (let fs_cand of vp_candidate.option_wrappers) {
         for (let ov_attribute of OPTION_VALUE_ATTRIBUTES) {
@@ -246,7 +245,7 @@ function detectOptionValues_2(vp_candidate, optionCount, optionValueRack) {
           const dataValueFound = fs_cand.querySelector(attributeSelector);
           if (dataValueFound) {
             matchedAttributes.add(ov_attribute);
-            selectors.push(dataValueFound);
+            selectors.add(dataValueFound);
             dataValuesMatched.push(attributeSelector);
             // break;
           }
@@ -254,14 +253,12 @@ function detectOptionValues_2(vp_candidate, optionCount, optionValueRack) {
       }
     }
 
-    finalSelectorResult = {
-      selectors,
-      dataValuesMatched,
-      matchedAttributes,
-    };
+    // finalSelectorResult = {
+    //   selectors,
+    //   dataValuesMatched,
+    //   matchedAttributes,
+    // };
   } else {
-    let selectors = [],
-      dataValuesMatched = [];
     let fs_cand = vp_candidate.option_wrappers[0];
 
     // console.log(fs_cand, optionValueRack);
@@ -274,25 +271,35 @@ function detectOptionValues_2(vp_candidate, optionCount, optionValueRack) {
         const dataValueFound = fs_cand.querySelector(attributeSelector);
         if (dataValueFound) {
           matchedAttributes.add(ov_attribute);
-          selectors.push(dataValueFound);
+          selectors.add(dataValueFound);
           dataValuesMatched.push(attributeSelector);
           // break;
         }
       }
     }
 
-    finalSelectorResult = {
-      selectors,
-      dataValuesMatched,
-      matchedAttributes,
-    };
+    // finalSelectorResult = {
+    //   selector_set: Array.from(selectors),
+    //   dataValuesMatched,
+    //   matchedAttributes,
+    // };
   }
 
-  if (finalSelectorResult) {
+  finalSelectorResult = {
+    selector_set: Array.from(selectors),
+    dataValuesMatched,
+    matchedAttributes,
+  };
+
+  if (finalSelectorResult.selector_set.length) {
     return finalSelectorResult;
   }
 
-  return false;
+  // LET US NOW START THE WORK ON OPTION VALUE ARRANGEMENT
+  // AS PER FIELDSETS
+
+
+  return null;
 }
 
 // HELPER:
@@ -390,21 +397,32 @@ async function test() {
     return false;
   });
 
+  
+
   // For cross-checking
-  if (window.CAMOUFLAGEE)
+  if (window.CAMOUFLAGEE && finalVariantPickerTest)
     finalVariantPickerTest.camouflage_selectors =
       window.CAMOUFLAGEE.items[0].selectors;
 
+  if(finalVariantPickerTest){
+    finalVariantPickerTest = {
+      a__vp_candidate : finalVariantPickerTest.vp_candidate,
+      b__option_wrappers : finalVariantPickerTest.option_wrappers,
+      c__selectors : finalVariantPickerTest.selectorData,
+      d__camouflage_selectors : finalVariantPickerTest.camouflage_selectors,
+    }
+  }
+
   targetData = {
     A__finalVariantPicker: finalVariantPickerTest,
-    A__mainTargetData: variantPickerData,
-    B__precursorData: {
+    B__mainTargetData: variantPickerData,
+    C__precursorData: {
       parentNode: candidateObject.parent,
       parentFoundInAnchorMode: parentFoundInAnchorMode,
       mainContainerCandidates: variantPickerCandidates,
     },
 
-    C__anchorData: {
+    D__anchorData: {
       anchor: anchor,
       productForm: anchor.parentElement,
     },
@@ -418,7 +436,5 @@ await test();
 // we now need another function to
 // 1. place the selectors in their corresponding option-wrappers,
 // 2. Filter out the correct selectors if there are strays in the selectors list.
-// 3. Also, instead of option values, variantIds are used in the data-* values of the     selectors. How would you tackle that issue ? 
+// 3. Also, instead of option values, variantIds are used in the data-* values of the     selectors. How would you tackle that issue ?
 // QUESTION TO ADDRESS : How would you know that which selector is correct ?
-
-

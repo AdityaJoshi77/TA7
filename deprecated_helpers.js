@@ -167,3 +167,30 @@ function detectOptionValues(vp_candidate, sampleOptionValue) {
   // no fieldset candidate in the vp_candidate has any attribute holding the
   // sampleOptionValue, not our variantPicker
 }
+
+
+function normalizeSelectorSetForMultiOptionCount(optionExtractionKeys) {
+  let finalSelectorSet = optionExtractionKeys.map((optionExtKey) => {
+    let ov_attribute_array = Array.from(optionExtKey.ov_attribute);
+    let selectorArrayPerOptionAxis = new Set();
+    let fs_cand = optionExtKey.fs_cand;
+
+    for (let ov_attribute of ov_attribute_array) {
+      for (let optionValue of optionExtKey.optionAxis.values) {
+        const attributeSelector = `[${ov_attribute}="${CSS.escape(
+          optionValue
+        )}"]`;
+        let selector = fs_cand.querySelector(attributeSelector);
+        if (selector) selectorArrayPerOptionAxis.add(selector);
+      }
+    }
+
+    if(selectorArrayPerOptionAxis.length > optionExtKey.optionAxis.values.length){
+      
+    }
+
+    return Array.from(selectorArrayPerOptionAxis);
+  });
+
+  return finalSelectorSet;
+}

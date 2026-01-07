@@ -93,8 +93,11 @@ function getVariantPickerCandidates(parentNode, productJSON) {
     "options",
     "product",
     "selector",
+    "productform"// testing
   ];
   const array_B = [
+    "variant",
+    "variants",
     "picker",
     "pickers",
     "select",
@@ -107,6 +110,7 @@ function getVariantPickerCandidates(parentNode, productJSON) {
     "container",
     "option",
     "options",
+    "update",// for testing purpose
     "block", // for testing purpose.
     "form", // for testing purpose.
     "list", // for testing purpose.
@@ -115,17 +119,18 @@ function getVariantPickerCandidates(parentNode, productJSON) {
   // The smaller these two arrays array_A and array_B are, the better.
   // Their lengths are proportional to our dependency on the theme, which we wish to reduce
 
-  // DEBUGGING:
-  const regex = new RegExp(
-    `(${array_A.join("|")})([-_]+)(${array_B.join("|")})([-_]+[a-z0-9]+)*`,
-    "i"
-  );
-
-  // PRODUCTION :
+  // ORIGIANL:
   // const regex = new RegExp(
   //   `(${array_A.join("|")})([-_]+)(${array_B.join("|")})([-_]+[a-z0-9]+)*`,
   //   "i"
   // );
+
+  // TESTING :
+  const regex = new RegExp(
+    `(${array_A.join("|")})(?:[-_]*)(?:${array_B.join("|")})(?:[a-z0-9]*)`,
+    "i"
+  );
+
 
   const matchedElements = Array.from(parentNode.querySelectorAll("*")).filter(
     (el) => {
@@ -282,8 +287,8 @@ function detectOptionValues_2(
 
     // console.log(fs_cand, optionValueRack);
 
-    for (let optionValue of optionValueRack) {
-      for (let ov_attribute of OPTION_VALUE_ATTRIBUTES) {
+    for (let ov_attribute of OPTION_VALUE_ATTRIBUTES) {
+      for (let optionValue of optionValueRack) {
         const attributeSelector = `[${ov_attribute}="${CSS.escape(
           optionValue
         )}"]`;
@@ -315,7 +320,8 @@ function detectOptionValues_2(
 
       // call the function to extract and selectors per option Axis if optionCount > 1.
       finalSelectorResult.selector_set =
-        normalizeSelectorSetForMultiOptionCount(optionExtractionKeys);
+        // normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys);
+        normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys);
     } else {
       console.log({
         option_extraction_status: "[Failure]",
@@ -334,23 +340,26 @@ function detectOptionValues_2(
   return null;
 }
 
-function normalizeSelectorSetForMultiOptionCount(optionExtractionKeys) {
+function normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys) {
   let finalSelectorSet = optionExtractionKeys.map((optionExtKey) => {
     let ov_attribute_array = Array.from(optionExtKey.ov_attribute);
-    let selectorArrayPerOptionAxis = new Set();
+    let selectorsPerOptionAxisPerOVA = new Object();
     let fs_cand = optionExtKey.fs_cand;
 
     for (let ov_attribute of ov_attribute_array) {
+      selectorsPerOptionAxisPerOVA[ov_attribute] = new Set();
       for (let optionValue of optionExtKey.optionAxis.values) {
         const attributeSelector = `[${ov_attribute}="${CSS.escape(
           optionValue
         )}"]`;
         let selector = fs_cand.querySelector(attributeSelector);
-        if (selector) selectorArrayPerOptionAxis.add(selector);
+        if (selector) selectorsPerOptionAxisPerOVA[ov_attribute].add(selector);
       }
+
+      selectorsPerOptionAxisPerOVA[ov_attribute] = Array.from(selectorsPerOptionAxisPerOVA[ov_attribute]);
     }
 
-    return Array.from(selectorArrayPerOptionAxis);
+    return selectorsPerOptionAxisPerOVA;
   });
 
   return finalSelectorSet;
@@ -491,3 +500,5 @@ await test();
 // 2. Filter out the correct selectors if there are strays in the selectors list.
 // 3. Also, instead of option values, variantIds are used in the data-* values of the     selectors. How would you tackle that issue ?
 // QUESTION TO ADDRESS : How would you know that which selector is correct ?
+
+// SUGGESTION : Look for the two stores where the variant picker could not be detected. 

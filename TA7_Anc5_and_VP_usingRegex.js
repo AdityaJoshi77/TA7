@@ -93,7 +93,7 @@ function getVariantPickerCandidates(parentNode, productJSON) {
     "options",
     "product",
     "selector",
-    "productform"// testing
+    "productform", // testing
   ];
   const array_B = [
     "variant",
@@ -110,7 +110,9 @@ function getVariantPickerCandidates(parentNode, productJSON) {
     "container",
     "option",
     "options",
-    "update",// for testing purpose
+    "swatch",
+    "swatches",
+    "update", // for testing purpose
     "block", // for testing purpose.
     "form", // for testing purpose.
     "list", // for testing purpose.
@@ -130,7 +132,6 @@ function getVariantPickerCandidates(parentNode, productJSON) {
     `(${array_A.join("|")})(?:[-_]*)(?:${array_B.join("|")})(?:[a-z0-9]*)`,
     "i"
   );
-
 
   const matchedElements = Array.from(parentNode.querySelectorAll("*")).filter(
     (el) => {
@@ -243,14 +244,13 @@ function detectOptionValues_2(
   let finalSelectorResult;
   let matchedAttributes = new Set();
   let selectors = new Set();
-  let dataValuesMatched = [];
+  let dataValuesMatched = new Set();
 
-  let optionExtractionKeys = []; // used for final selector extraction if optionCount > 1
+  let optionExtractionKeys = []; // used for selector assortment as per data-* value
 
   if (optionCount > 1) {
     for (let optionValueIndex in optionValueRack) {
       let optionExtKey = {
-        optionAxisIndex: optionValueIndex,
         optionAxis: optionsInJSON[optionValueIndex],
         ov_attribute: [],
         fs_cand: null,
@@ -265,7 +265,7 @@ function detectOptionValues_2(
           if (dataValueFound) {
             matchedAttributes.add(ov_attribute);
             selectors.add(dataValueFound);
-            dataValuesMatched.push(attributeSelector);
+            dataValuesMatched.add(attributeSelector);
             // break;
 
             optionExtKey.ov_attribute.push(ov_attribute);
@@ -284,8 +284,11 @@ function detectOptionValues_2(
     }
   } else {
     let fs_cand = vp_candidate.option_wrappers[0];
-
-    // console.log(fs_cand, optionValueRack);
+    let optionExtKey = {
+      optionAxis: optionValueRack,
+      ov_attribute: [],
+      fs_cand,
+    };
 
     for (let ov_attribute of OPTION_VALUE_ATTRIBUTES) {
       for (let optionValue of optionValueRack) {
@@ -296,51 +299,52 @@ function detectOptionValues_2(
         if (dataValueFound) {
           matchedAttributes.add(ov_attribute);
           selectors.add(dataValueFound);
-          dataValuesMatched.push(attributeSelector);
+          dataValuesMatched.add(attributeSelector);
           // break;
+
+          optionExtKey.ov_attribute.push(ov_attribute);
         }
       }
     }
+
+    optionExtractionKeys.push(optionExtKey);
   }
 
   // finalizing the selectorResult for both optionCounts (1 and >1)
   finalSelectorResult = {
-    selector_set: Array.from(selectors),
+    // selector_set: Array.from(selectors),
     dataValuesMatched,
     matchedAttributes,
   };
 
   // testing optionValuesAssortment :
-  if (optionCount > 1) {
-    if (optionExtractionKeys.length === optionCount) {
-      console.log({
-        option_extraction_status: "[Success]",
-        optionExtractionKeys,
-      });
+  if (optionExtractionKeys.length === optionCount) {
+    console.log({
+      option_extraction_status: "[Success]",
+      optionExtractionKeys,
+    });
 
-      // call the function to extract and selectors per option Axis if optionCount > 1.
-      finalSelectorResult.selector_set =
-        // normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys);
-        normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys);
-    } else {
-      console.log({
-        option_extraction_status: "[Failure]",
-        optionExtractionKeys,
-      });
-    }
+    // call the function to extract and selectors per option Axis per ov_attribute if optionCount > 1.
+    finalSelectorResult.selector_set =
+      normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys);
+  } else {
+    console.log({
+      option_extraction_status: "[Failure]",
+      optionExtractionKeys,
+    });
   }
 
   if (finalSelectorResult.selector_set.length) {
     return finalSelectorResult;
   }
 
-  // LET US NOW START THE WORK ON OPTION VALUE ARRANGEMENT
-  // AS PER FIELDSETS
-
   return null;
 }
 
-function normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys) {
+function normalizeSelectorSetForMultiOptionCount_filtered(
+  optionExtractionKeys
+) {
+  let optionCount = optionExtractionKeys.length;
   let finalSelectorSet = optionExtractionKeys.map((optionExtKey) => {
     let ov_attribute_array = Array.from(optionExtKey.ov_attribute);
     let selectorsPerOptionAxisPerOVA = new Object();
@@ -348,7 +352,11 @@ function normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys) 
 
     for (let ov_attribute of ov_attribute_array) {
       selectorsPerOptionAxisPerOVA[ov_attribute] = new Set();
-      for (let optionValue of optionExtKey.optionAxis.values) {
+      let optionValuesInAxis =
+        optionCount > 1
+          ? optionExtKey.optionAxis.values
+          : optionExtKey.optionAxis;
+      for (let optionValue of optionValuesInAxis) {
         const attributeSelector = `[${ov_attribute}="${CSS.escape(
           optionValue
         )}"]`;
@@ -356,7 +364,9 @@ function normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys) 
         if (selector) selectorsPerOptionAxisPerOVA[ov_attribute].add(selector);
       }
 
-      selectorsPerOptionAxisPerOVA[ov_attribute] = Array.from(selectorsPerOptionAxisPerOVA[ov_attribute]);
+      selectorsPerOptionAxisPerOVA[ov_attribute] = Array.from(
+        selectorsPerOptionAxisPerOVA[ov_attribute]
+      );
     }
 
     return selectorsPerOptionAxisPerOVA;
@@ -498,7 +508,7 @@ await test();
 // we now need another function to
 // 1. [DONE] : place the selectors in their corresponding option-wrappers,
 // 2. Filter out the correct selectors if there are strays in the selectors list.
-// 3. Also, instead of option values, variantIds are used in the data-* values of the     selectors. How would you tackle that issue ?
+// 3. Also, instead of option values, variantIds are used in the data-* values of the selectors. How would you tackle that issue ?
 // QUESTION TO ADDRESS : How would you know that which selector is correct ?
 
-// SUGGESTION : Look for the two stores where the variant picker could not be detected. 
+// SUGGESTION : Look for the two stores where the variant picker could not be detected.

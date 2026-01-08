@@ -93,7 +93,7 @@ function getVariantPickerCandidates(parentNode, productJSON) {
     "options",
     "product",
     "selector",
-    "productform"// testing
+    "productform", // testing
   ];
   const array_B = [
     "variant",
@@ -110,7 +110,9 @@ function getVariantPickerCandidates(parentNode, productJSON) {
     "container",
     "option",
     "options",
-    "update",// for testing purpose
+    "swatch",
+    "swatches",
+    "update", // for testing purpose
     "block", // for testing purpose.
     "form", // for testing purpose.
     "list", // for testing purpose.
@@ -130,7 +132,6 @@ function getVariantPickerCandidates(parentNode, productJSON) {
     `(${array_A.join("|")})(?:[-_]*)(?:${array_B.join("|")})(?:[a-z0-9]*)`,
     "i"
   );
-
 
   const matchedElements = Array.from(parentNode.querySelectorAll("*")).filter(
     (el) => {
@@ -243,14 +244,13 @@ function detectOptionValues_2(
   let finalSelectorResult;
   let matchedAttributes = new Set();
   let selectors = new Set();
-  let dataValuesMatched = [];
+  let dataValuesMatched = new Set();
 
-  let optionExtractionKeys = []; // used for final selector extraction if optionCount > 1
+  let optionExtractionKeys = []; // used for selector assortment as per data-* value
 
   if (optionCount > 1) {
     for (let optionValueIndex in optionValueRack) {
       let optionExtKey = {
-        optionAxisIndex: optionValueIndex,
         optionAxis: optionsInJSON[optionValueIndex],
         ov_attribute: [],
         fs_cand: null,
@@ -265,7 +265,7 @@ function detectOptionValues_2(
           if (dataValueFound) {
             matchedAttributes.add(ov_attribute);
             selectors.add(dataValueFound);
-            dataValuesMatched.push(attributeSelector);
+            dataValuesMatched.add(attributeSelector);
             // break;
 
             optionExtKey.ov_attribute.push(ov_attribute);
@@ -284,8 +284,11 @@ function detectOptionValues_2(
     }
   } else {
     let fs_cand = vp_candidate.option_wrappers[0];
-
-    // console.log(fs_cand, optionValueRack);
+    let optionExtKey = {
+      optionAxis: optionValueRack,
+      ov_attribute: [],
+      fs_cand,
+    };
 
     for (let ov_attribute of OPTION_VALUE_ATTRIBUTES) {
       for (let optionValue of optionValueRack) {
@@ -296,96 +299,255 @@ function detectOptionValues_2(
         if (dataValueFound) {
           matchedAttributes.add(ov_attribute);
           selectors.add(dataValueFound);
-          dataValuesMatched.push(attributeSelector);
+          dataValuesMatched.add(attributeSelector);
           // break;
+
+          optionExtKey.ov_attribute.push(ov_attribute);
         }
       }
     }
+
+    optionExtractionKeys.push(optionExtKey);
   }
 
   // finalizing the selectorResult for both optionCounts (1 and >1)
   finalSelectorResult = {
-    selector_set: Array.from(selectors),
+    // selector_set: Array.from(selectors),
     dataValuesMatched,
     matchedAttributes,
   };
 
   // testing optionValuesAssortment :
-  if (optionCount > 1) {
-    if (optionExtractionKeys.length === optionCount) {
-      console.log({
-        option_extraction_status: "[Success]",
-        optionExtractionKeys,
-      });
+  if (optionExtractionKeys.length === optionCount) {
+    console.log({
+      option_extraction_status: "[Success]",
+      optionExtractionKeys,
+    });
 
-      // call the function to extract and selectors per option Axis if optionCount > 1.
-      finalSelectorResult.selector_set =
-        normalizeSelectorSetForMultiOptionCount(optionExtractionKeys);
-    } else {
-      console.log({
-        option_extraction_status: "[Failure]",
-        optionExtractionKeys,
-      });
-    }
+    // call the function to extract and selectors per option Axis per ov_attribute if optionCount > 1.
+    finalSelectorResult.selector_set =
+      // normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys);
+      normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
+        optionExtractionKeys
+      );
+
+    finalSelectorResult.selector_data = extractFinalSelectors(
+      finalSelectorResult.selector_set
+    );
+  } else {
+    console.log({
+      option_extraction_status: "[Failure]",
+      optionExtractionKeys,
+    });
   }
 
   if (finalSelectorResult.selector_set.length) {
     return finalSelectorResult;
   }
 
-  // LET US NOW START THE WORK ON OPTION VALUE ARRANGEMENT
-  // AS PER FIELDSETS
-
   return null;
 }
 
-function normalizeSelectorSetForMultiOptionCount(optionExtractionKeys) {
+function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
+  optionExtractionKeys
+) {
+  let optionCount = optionExtractionKeys.length;
+
   let finalSelectorSet = optionExtractionKeys.map((optionExtKey) => {
     let ov_attribute_array = Array.from(optionExtKey.ov_attribute);
-    let selectorArrayPerOptionAxis = new Set();
     let fs_cand = optionExtKey.fs_cand;
 
+    // Step 1: collect all selector sets per ov_attribute
+    let rawSelectorSets = [];
+
     for (let ov_attribute of ov_attribute_array) {
-      for (let optionValue of optionExtKey.optionAxis.values) {
+      let selectorSet = new Set();
+
+      let optionValuesInAxis =
+        optionCount > 1
+          ? optionExtKey.optionAxis.values
+          : optionExtKey.optionAxis;
+
+      for (let optionValue of optionValuesInAxis) {
         const attributeSelector = `[${ov_attribute}="${CSS.escape(
           optionValue
         )}"]`;
-        let selector = fs_cand.querySelector(attributeSelector);
-        if (selector) selectorArrayPerOptionAxis.add(selector);
+
+        let el = fs_cand.querySelector(attributeSelector);
+        if (el) selectorSet.add(el);
+      }
+
+      if (selectorSet.size) {
+        rawSelectorSets.push({
+          ov_attribute,
+          selectors: selectorSet,
+        });
       }
     }
 
-    if(selectorArrayPerOptionAxis.length > optionExtKey.optionAxis.values.length){
-      
+    // Step 2: deduplicate by selector-set identity
+    let dedupedResult = {};
+
+    for (let i = 0; i < rawSelectorSets.length; i++) {
+      let { ov_attribute, selectors } = rawSelectorSets[i];
+
+      let isDuplicate = false;
+
+      for (let existingAttr in dedupedResult) {
+        let existingSet = dedupedResult[existingAttr];
+
+        if (
+          selectors.size === existingSet.length &&
+          [...selectors].every((el) => existingSet.includes(el))
+        ) {
+          isDuplicate = true;
+          break;
+        }
+      }
+
+      if (!isDuplicate) {
+        dedupedResult[ov_attribute] = Array.from(selectors);
+      }
     }
 
-    return Array.from(selectorArrayPerOptionAxis);
+    return dedupedResult;
   });
 
   return finalSelectorSet;
 }
 
-function normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys) {
+function normalizeSelectorSetForMultiOptionCount_filtered(
+  optionExtractionKeys
+) {
+  let optionCount = optionExtractionKeys.length;
   let finalSelectorSet = optionExtractionKeys.map((optionExtKey) => {
     let ov_attribute_array = Array.from(optionExtKey.ov_attribute);
-    let selectorsPerOptionAxisPerOVA;
+    let selectorsPerOptionAxisPerOVA = new Object();
     let fs_cand = optionExtKey.fs_cand;
 
     for (let ov_attribute of ov_attribute_array) {
-      selectorsPerOptionAxisPerOVA.ov_attribute = new Set();
-      for (let optionValue of optionExtKey.optionAxis.values) {
+      selectorsPerOptionAxisPerOVA[ov_attribute] = new Set();
+      let optionValuesInAxis =
+        optionCount > 1
+          ? optionExtKey.optionAxis.values
+          : optionExtKey.optionAxis;
+      for (let optionValue of optionValuesInAxis) {
         const attributeSelector = `[${ov_attribute}="${CSS.escape(
           optionValue
         )}"]`;
         let selector = fs_cand.querySelector(attributeSelector);
-        if (selector) selectorsPerOptionAxisPerOVA.ov_attribute.add(selector);
+        if (selector) selectorsPerOptionAxisPerOVA[ov_attribute].add(selector);
       }
+
+      selectorsPerOptionAxisPerOVA[ov_attribute] = Array.from(
+        selectorsPerOptionAxisPerOVA[ov_attribute]
+      );
     }
 
-    return Array.from(selectorArrayPerOptionAxis);
+    return selectorsPerOptionAxisPerOVA;
   });
 
   return finalSelectorSet;
+}
+
+// HELPER:
+// Checks the selectors' validity :
+function extractFinalSelectors(selector_set) {
+  let extractedSelectorData = [];
+
+  for (const optionAxisObject of selector_set) {
+    const entries = Object.entries(optionAxisObject);
+
+    // Fast path: only one candidate → accept without testing
+    if (entries.length === 1) {
+      const [[attribute_name, selectors]] = entries;
+      extractedSelectorData.push({ attribute_name, selectors });
+      continue;
+    }
+
+    // Slow path: ambiguity → test behaviorally
+    for (const [ov_attribute, selectors] of entries) {
+      // const didChange = await testSelector(selectors[0]);
+      const selectorWrapper = selectors[0].parentElement;
+      const style = getComputedStyle(selectorWrapper);
+
+      const isSelectorWrapperVisible =
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        selectors[0].offsetParent !== null;
+
+      if (isSelectorWrapperVisible) {
+        extractedSelectorData.push({
+          attribute_name: ov_attribute,
+          selectors,
+        });
+        break;
+      }
+    }
+  }
+
+  return extractedSelectorData;
+}
+
+// HELPER:
+// tests whether the selector in hand participates in variant selection
+async function testSelector(selector, delay = 100) {
+  const beforeVariant = new URLSearchParams(location.search).get("variant");
+
+  triggerSelector(selector);
+
+  await new Promise((r) => setTimeout(r, delay));
+
+  return didVariantChange(beforeVariant);
+}
+
+function triggerSelector(el) {
+  if (!el) return;
+
+  // Visibility guard (your earlier requirement)
+  const style = window.getComputedStyle(el);
+  if (
+    style.display === "none" ||
+    style.visibility === "hidden" ||
+    el.offsetParent === null
+  ) {
+    return;
+  }
+
+  el.focus({ preventScroll: true });
+
+  // INPUT / OPTION logic stays the same
+  if (el.tagName === "INPUT") {
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    return;
+  }
+
+  if (el.tagName === "OPTION") {
+    el.selected = true;
+    el.parentElement.dispatchEvent(new Event("change", { bubbles: true }));
+    return;
+  }
+
+  // 🔑 REAL USER-LIKE CLICK
+  el.dispatchEvent(
+    new MouseEvent("mousedown", { bubbles: true, cancelable: true })
+  );
+  el.dispatchEvent(
+    new MouseEvent("mouseup", { bubbles: true, cancelable: true })
+  );
+  el.dispatchEvent(
+    new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+    })
+  );
+}
+
+function didVariantChange(beforeVariant) {
+  const afterVariant = new URLSearchParams(location.search).get("variant");
+  return afterVariant && afterVariant !== beforeVariant;
 }
 
 // HELPER:
@@ -469,20 +631,20 @@ async function test() {
       ? product.options.map((option) => option.values[0])
       : product.options[0].values;
 
-  finalVariantPickerTest = variantPickerData.find((item) => {
-    let finalSelectorResult = detectOptionValues_2(
+  for (const item of variantPickerData) {
+    const finalSelectorResult = await detectOptionValues_2(
       item,
       product.options.length,
       newOptionValueRack,
       product.options
     );
+
     if (finalSelectorResult) {
       item.selectorData = finalSelectorResult;
-      return true;
+      finalVariantPickerTest = item;
+      break;
     }
-
-    return false;
-  });
+  }
 
   // For cross-checking
   if (window.CAMOUFLAGEE && finalVariantPickerTest)
@@ -521,7 +683,8 @@ await test();
 // we now need another function to
 // 1. [DONE] : place the selectors in their corresponding option-wrappers,
 // 2. Filter out the correct selectors if there are strays in the selectors list.
-// 3. Also, instead of option values, variantIds are used in the data-* values of the     selectors. How would you tackle that issue ?
+// 3. Also, instead of option values, variantIds are used in the data-* values of the selectors. How would you tackle that issue ?
 // QUESTION TO ADDRESS : How would you know that which selector is correct ?
 
-// SUGGESTION : Look for the two stores where the variant picker could not be detected. 
+// SUGGESTION : Look for the two stores where the variant picker could not be detected.
+// SUGGESTION : Filter out the selector sets if the wrapper parent of the inputs is visually hidden.

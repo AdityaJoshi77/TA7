@@ -351,12 +351,7 @@ function detectOptionValues_2(
       finalSelectorResult.selector_set
     );
   } else {
-    console.log({
-      option_extraction_status: "[Failure]",
-      optionExtractionKeys,
-    });
-
-    return;
+    return null;
   }
 
   if (finalSelectorResult.selector_set.length) {

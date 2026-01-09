@@ -19,7 +19,18 @@ function findVariantIdAnchor() {
     const form = el.closest("form");
     if (!form) return false;
 
-    return formMatchesRegex(form, productFormRegex);
+    // the true product form holds the add to cart button, 
+    // and therefore cannot be hidden
+    let isFormVisible = false;
+    const style = getComputedStyle(form);
+    isFormVisible =
+      style.display !== "none" &&
+      style.visibility !== "hidden" &&
+      parseFloat(style.opacity) > 0 &&
+      form.offsetParent !== null &&
+      form.getClientRects().length > 0;
+
+    return isFormVisible && formMatchesRegex(form, productFormRegex);
   });
 
   if (anchorProductForm) {
@@ -28,7 +39,6 @@ function findVariantIdAnchor() {
 
   console.log({
     status: "Failed to find variantIdAnchorProductForm",
-    data: anchorDataForDebugging,
   });
 
   return null;
@@ -302,7 +312,7 @@ function detectOptionValues_2(
     let optionExtKey = {
       optionAxis: optionValueRack,
       ov_attribute: [],
-      fs_cand : null
+      fs_cand: null,
     };
 
     for (let ov_attribute of OPTION_VALUE_ATTRIBUTES) {
@@ -321,8 +331,7 @@ function detectOptionValues_2(
         }
       }
     }
-    if(optionExtKey.fs_cand)
-      optionExtractionKeys.push(optionExtKey);
+    if (optionExtKey.fs_cand) optionExtractionKeys.push(optionExtKey);
   }
 
   // finalizing the selectorResult for both optionCounts (1 and >1)
@@ -339,6 +348,9 @@ function detectOptionValues_2(
       optionExtractionKeys,
     });
 
+    // QUESTION TO ADDRESS : How would you know that which selector is correct ?
+    // The parent wrapper of the correct selector set will be visually present.
+
     // call the function to extract selectors per option Axis per ov_attribute if optionCount > 1.
     finalSelectorResult.selector_set =
       // normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys);
@@ -346,7 +358,7 @@ function detectOptionValues_2(
         optionExtractionKeys
       );
 
-    // 
+    //
     finalSelectorResult.selector_data = extractFinalSelectors(
       finalSelectorResult.selector_set
     );
@@ -480,7 +492,6 @@ function extractFinalSelectors(selector_set) {
 
     // Slow path: ambiguity → test behaviorally
     for (const [ov_attribute, selectors] of entries) {
-      
       const selectorWrapper = selectors[0].parentElement;
       const style = getComputedStyle(selectorWrapper);
 
@@ -501,7 +512,6 @@ function extractFinalSelectors(selector_set) {
 
   return extractedSelectorData;
 }
-
 
 // HELPER:
 // Normalization of data-* attribute values
@@ -574,23 +584,20 @@ function isValidVariantPicker(
   // }
 
   let visually_present_fs_cand = new Array();
-  visually_present_fs_cand = vp_candidate.option_wrappers.filter(
-    (fs_cand) => {
-      let isOptionWrapperVisible = false;
-      const style = getComputedStyle(fs_cand);
-      isOptionWrapperVisible =
-        style.display !== "none" &&
-        style.visibility !== "hidden" &&
-        parseFloat(style.opacity) > 0 &&
-        fs_cand.offsetParent !== null &&
-        fs_cand.getClientRects().length > 0;
+  visually_present_fs_cand = vp_candidate.option_wrappers.filter((fs_cand) => {
+    let isOptionWrapperVisible = false;
+    const style = getComputedStyle(fs_cand);
+    isOptionWrapperVisible =
+      style.display !== "none" &&
+      style.visibility !== "hidden" &&
+      parseFloat(style.opacity) > 0 &&
+      fs_cand.offsetParent !== null &&
+      fs_cand.getClientRects().length > 0;
 
-      return isOptionWrapperVisible;
-    }
-  );
+    return isOptionWrapperVisible;
+  });
 
-  if(visually_present_fs_cand.length === 0)
-    return null;
+  if (visually_present_fs_cand.length === 0) return null;
 
   // check 2 : the visually present fs_cand set and optionAxes have a 1:1 mapping
 
@@ -760,12 +767,8 @@ async function test() {
 
 await test();
 
-// The detectOptionValues_2 has only confirmed the correctness of the variant-picker
-// we now need another function to
 // 1. [DONE] : place the selectors in their corresponding option-wrappers,
-// 2. Filter out the correct selectors if there are strays in the selectors list.
+// 2. [DONE] : Filter out the correct selectors if there are strays in the selectors list.
 // 3. Also, instead of option values, variantIds are used in the data-* values of the selectors. How would you tackle that issue ?
-// QUESTION TO ADDRESS : How would you know that which selector is correct ?
 
-// SUGGESTION : Look for the two stores where the variant picker could not be detected.
-// SUGGESTION : Filter out the selector sets if the wrapper parent of the inputs is visually hidden.
+// 4. What about stores where you get more

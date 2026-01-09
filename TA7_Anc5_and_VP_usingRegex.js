@@ -241,6 +241,21 @@ function detectOptionValues_2(
     "name",
   ];
 
+  // THE VERY FIRST CHECK :
+  // Are the option wrappers in the variant picker in hand :
+  // visually present
+  // 1:1 mapped with the option axes.
+  if (
+    optionCount > 1 &&
+    !isValidVariantPicker(
+      vp_candidate,
+      optionCount,
+      optionValueRack,
+      optionsInJSON
+    )
+  )
+    return null;
+
   let finalSelectorResult;
   let matchedAttributes = new Set();
   let selectors = new Set();
@@ -287,7 +302,7 @@ function detectOptionValues_2(
     let optionExtKey = {
       optionAxis: optionValueRack,
       ov_attribute: [],
-      fs_cand,
+      fs_cand : null
     };
 
     for (let ov_attribute of OPTION_VALUE_ATTRIBUTES) {
@@ -301,13 +316,13 @@ function detectOptionValues_2(
           selectors.add(dataValueFound);
           dataValuesMatched.add(attributeSelector);
           // break;
-
+          optionExtKey.fs_cand = fs_cand;
           optionExtKey.ov_attribute.push(ov_attribute);
         }
       }
     }
-
-    optionExtractionKeys.push(optionExtKey);
+    if(optionExtKey.fs_cand)
+      optionExtractionKeys.push(optionExtKey);
   }
 
   // finalizing the selectorResult for both optionCounts (1 and >1)
@@ -324,15 +339,24 @@ function detectOptionValues_2(
       optionExtractionKeys,
     });
 
-    // call the function to extract and selectors per option Axis per ov_attribute if optionCount > 1.
+    // call the function to extract selectors per option Axis per ov_attribute if optionCount > 1.
     finalSelectorResult.selector_set =
       // normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys);
-      normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(optionExtractionKeys);
+      normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
+        optionExtractionKeys
+      );
+
+    // 
+    finalSelectorResult.selector_data = extractFinalSelectors(
+      finalSelectorResult.selector_set
+    );
   } else {
     console.log({
       option_extraction_status: "[Failure]",
       optionExtractionKeys,
     });
+
+    return;
   }
 
   if (finalSelectorResult.selector_set.length) {
@@ -410,7 +434,6 @@ function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
   return finalSelectorSet;
 }
 
-
 function normalizeSelectorSetForMultiOptionCount_filtered(
   optionExtractionKeys
 ) {
@@ -446,6 +469,46 @@ function normalizeSelectorSetForMultiOptionCount_filtered(
 }
 
 // HELPER:
+// Checks the selectors' validity :
+function extractFinalSelectors(selector_set) {
+  let extractedSelectorData = [];
+
+  for (const optionAxisObject of selector_set) {
+    const entries = Object.entries(optionAxisObject);
+
+    // Fast path: only one candidate → accept without testing
+    if (entries.length === 1) {
+      const [[attribute_name, selectors]] = entries;
+      extractedSelectorData.push({ attribute_name, selectors });
+      continue;
+    }
+
+    // Slow path: ambiguity → test behaviorally
+    for (const [ov_attribute, selectors] of entries) {
+      
+      const selectorWrapper = selectors[0].parentElement;
+      const style = getComputedStyle(selectorWrapper);
+
+      const isSelectorWrapperVisible =
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        selectors[0].offsetParent !== null;
+
+      if (isSelectorWrapperVisible) {
+        extractedSelectorData.push({
+          attribute_name: ov_attribute,
+          selectors,
+        });
+        break;
+      }
+    }
+  }
+
+  return extractedSelectorData;
+}
+
+
+// HELPER:
 // Normalization of data-* attribute values
 function normalizeValue(value) {
   return value
@@ -455,6 +518,131 @@ function normalizeValue(value) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-") // spaces, symbols → hyphen
     .replace(/^-+|-+$/g, "");
+}
+
+function isValidVariantPicker(
+  vp_candidate,
+  optionCount,
+  optionValuesRack,
+  optionsInJSON
+) {
+  const OPTION_VALUE_ATTRIBUTES = [
+    // Tier 1 — high-confidence, canonical
+    "value",
+    "data-option-value",
+    "data-option-value-id",
+    "data-option-id",
+    "data-value",
+    "data-value-id",
+    "data-variant-id",
+    "data-variant",
+    "data-selected-value",
+
+    // Tier 2 — handles / normalized keys
+    "data-value-handle",
+    "data-option-handle",
+    "data-handle",
+    "data-option-key",
+    "data-key",
+
+    // Tier 3 — generic but meaningful
+    "data-option",
+    "data-option-index",
+    "data-index",
+    "data-name",
+    "data-current-value",
+
+    // Tier 4 — accessibility / framework-driven
+    "orig-value",
+    "aria-label",
+    "aria-valuetext",
+    "name",
+  ];
+
+  // check 1 : if none of the fs_cand in the vpc are visually present, return null
+
+  // DEPRECATED :
+  // Returns null if any fs_cand is visually hidden
+  // why deprecated : sometimes the secondary option axes get hidden when only one of their options is available
+  // for (let fs_cand of vp_candidate.option_wrappers) {
+  //   let isOptionWrapperVisible = false;
+  //   const style = getComputedStyle(fs_cand);
+
+  //   isOptionWrapperVisible =
+  //     style.display !== "none" &&
+  //     style.visibility !== "hidden" &&
+  //     parseFloat(style.opacity) > 0 &&
+  //     fs_cand.offsetParent !== null &&
+  //     fs_cand.getClientRects().length > 0;
+
+  //   if (!isOptionWrapperVisible) return null;
+  // }
+
+  let visually_present_fs_cand = new Array();
+  visually_present_fs_cand = vp_candidate.option_wrappers.filter(
+    (fs_cand) => {
+      let isOptionWrapperVisible = false;
+      const style = getComputedStyle(fs_cand);
+      isOptionWrapperVisible =
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        parseFloat(style.opacity) > 0 &&
+        fs_cand.offsetParent !== null &&
+        fs_cand.getClientRects().length > 0;
+
+      return isOptionWrapperVisible;
+    }
+  );
+
+  if(visually_present_fs_cand.length === 0)
+    return null;
+
+  // check 2 : the visually present fs_cand set and optionAxes have a 1:1 mapping
+
+  // ov_attribute filteration :
+  // check which ov_attribute are found in each visually present fs_cand, remove needless combos
+  let ov_attributes_filtered_per_fsCand = visually_present_fs_cand.map(
+    (fs_cand) => {
+      let matched_ova = OPTION_VALUE_ATTRIBUTES.filter((ova) =>
+        fs_cand.querySelector(`[${ova}]`)
+      );
+      return matched_ova;
+    }
+  );
+
+  let fieldSetMap = new Array(optionCount).fill(-1);
+  let fs_candidates = visually_present_fs_cand;
+  for (
+    let fs_cand_index = 0;
+    fs_cand_index < fs_candidates.length;
+    fs_cand_index++
+  ) {
+    for (
+      let optionAxisIndex = 0;
+      optionAxisIndex < optionValuesRack.length;
+      optionAxisIndex++
+    ) {
+      let selectorDetected = ov_attributes_filtered_per_fsCand[
+        fs_cand_index
+      ].some((ova) => {
+        let attributeSelector = `[${ova}="${CSS.escape(
+          optionValuesRack[optionAxisIndex]
+        )}"]`;
+        let fs_cand = fs_candidates[fs_cand_index];
+        return fs_cand.querySelector(attributeSelector);
+      });
+
+      if (selectorDetected) {
+        if (fieldSetMap[fs_cand_index] === -1) {
+          fieldSetMap[fs_cand_index] = optionAxisIndex;
+        } else {
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
 }
 
 async function test() {
@@ -526,20 +714,23 @@ async function test() {
       ? product.options.map((option) => option.values[0])
       : product.options[0].values;
 
-  finalVariantPickerTest = variantPickerData.find((item) => {
-    let finalSelectorResult = detectOptionValues_2(
+  for (const item of variantPickerData) {
+    const finalSelectorResult = detectOptionValues_2(
       item,
       product.options.length,
       newOptionValueRack,
       product.options
     );
+
     if (finalSelectorResult) {
       item.selectorData = finalSelectorResult;
-      return true;
+      finalVariantPickerTest = item;
+      break;
     }
+  }
 
-    return false;
-  });
+  // At this very juncture, the final variant picker, the fieldsets, the selectors
+  // are supposed to be detected
 
   // For cross-checking
   if (window.CAMOUFLAGEE && finalVariantPickerTest)
@@ -582,3 +773,4 @@ await test();
 // QUESTION TO ADDRESS : How would you know that which selector is correct ?
 
 // SUGGESTION : Look for the two stores where the variant picker could not be detected.
+// SUGGESTION : Filter out the selector sets if the wrapper parent of the inputs is visually hidden.

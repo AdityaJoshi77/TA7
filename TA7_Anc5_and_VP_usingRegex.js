@@ -65,7 +65,7 @@ function formMatchesRegex(form, productFormRegex) {
 // to get the specified ancestor of variantID anchorProductForm which could
 // be a potential container of variant picker.
 // Unless specified, we get the 4th ancestor of the variantID anchorProductForm.
-function getParentNode(node, maxDepth = 4, recall = false) {
+function getParentNodeForVPCSearch(node, maxDepth = 4, recall = false) {
   let current;
   let candidate;
 
@@ -652,6 +652,21 @@ function isValidVariantPicker(
 }
 
 async function test() {
+
+  let targetData = {
+    A__finalVariantPicker: null, //finalVariantPickerTest,
+    B__validStructureVPC: null, //validStructuredVPC,
+    C__regexMatchingVPCs: null, // regexMatchingVPC,
+    D__parentNodeForVPCSearch : null, // {
+    //  searchNode : candidateObject.parent,
+    //  parentFoundInAnchorMode
+    // }
+    E__anchorData: null//{
+    //   nameIdElement: anchorProductFormData.validNameIdElement,
+    //   anchorProductForm,
+    // },
+  };
+
   const anchorProductFormData = findAnchorProductForm();
 
   // Failure to find the anchorProductForm
@@ -662,10 +677,14 @@ async function test() {
       cause: "variantID anchorForm not found",
     };
     console.log(statusObject);
-    return statusObject;
+    return targetData;
   }
 
   const anchorProductForm = anchorProductFormData.anchorProductForm;
+  targetData.E__anchorData = {
+    nameIdElement : anchorProductFormData.validNameIdElement,
+    anchorProductForm
+  };
 
   // GET PRODUCT DATA
   const product = await getProductData();
@@ -674,8 +693,8 @@ async function test() {
   );
 
   // Find a stable parent,
-  // and look for eligible variant picker candidates in that parent
-  let candidateObject = getParentNode(anchorProductForm, false);
+  // and look for regex-matching variant picker candidates in that parent
+  let candidateObject = getParentNodeForVPCSearch(anchorProductForm, false);
   let parentFoundInAnchorMode = true;
   let regexMatchingVPC = getRegexMatchingVariantPickerCandidates(
     candidateObject.parent,
@@ -690,33 +709,43 @@ async function test() {
     !candidateObject.isBodyNext
   ) {
     parentFoundInAnchorMode = false;
-    candidateObject = getParentNode(candidateObject.parent, true);
+    candidateObject = getParentNodeForVPCSearch(candidateObject.parent, true);
     regexMatchingVPC = getRegexMatchingVariantPickerCandidates(
       candidateObject.parent
     );
+  }
+
+  targetData.D__parentNodeForVPCSearch = {
+    searchNode : candidateObject.parent,
+    parentFoundInAnchorMode
   }
 
   // Failure to find the variant picker candidates
   // INFERENCE : The variant picker regex might be insufficient
   if (!regexMatchingVPC.length) {
     console.log({
-      status: "[TA7 failed] : No variant picker found",
-      cause: candidateObject.isBodyNext ? "Body hit" : "Fault in Anchor",
-      anchorProductForm,
-      parent: candidateObject.parent,
+      status: "[TA7 failed] : No DOM node matched with variant picker regex"
     });
-    return [];
+    return targetData;
   }
 
-  let variantPickerData,
-    targetData,
-    finalVariantPickerTest = null;
+  targetData.C__regexMatchingVPCs = regexMatchingVPC;
 
-  validStructuredVPC = getVariantPickersHavingValidStructure(
+  let validStructuredVPC = getVariantPickersHavingValidStructure(
     regexMatchingVPC,
     optionNames
   );
 
+  if(!validStructuredVPC.length){
+    console.log({
+      status: "[TA7 failed] : No regex matching VPC is structurally valid"
+    });
+    return targetData;
+  }
+
+  targetData.B__validStructureVPC = validStructuredVPC;
+
+  let finalVariantPicker = null;
   let newOptionValueRack =
     product.options.length > 1
       ? product.options.map((option) => option.values[0])
@@ -732,7 +761,7 @@ async function test() {
 
     if (finalSelectorResult) {
       item.selectorData = finalSelectorResult;
-      finalVariantPickerTest = item;
+      finalVariantPicker = item;
       break;
     }
   }
@@ -741,33 +770,22 @@ async function test() {
   // are supposed to be detected
 
   // For cross-checking
-  if (window.CAMOUFLAGEE && finalVariantPickerTest)
-    finalVariantPickerTest.camouflage_selectors =
+  // REMOVE WHEN READY FOR PRODUCTION.
+  if (window.CAMOUFLAGEE && finalVariantPicker)
+    finalVariantPicker.camouflage_selectors =
       window.CAMOUFLAGEE.items[0].selectors;
 
-  if (finalVariantPickerTest) {
-    finalVariantPickerTest = {
-      a__vp_candidate: finalVariantPickerTest.vp_candidate,
-      b__option_wrappers: finalVariantPickerTest.option_wrappers,
-      c__selectors: finalVariantPickerTest.selectorData,
-      d__camouflage_selectors: finalVariantPickerTest.camouflage_selectors,
+  if (finalVariantPicker) {
+    finalVariantPicker = {
+      a__vp_candidate: finalVariantPicker.vp_candidate,
+      b__option_wrappers: finalVariantPicker.option_wrappers,
+      c__selectors: finalVariantPicker.selectorData,
+      d__camouflage_selectors: finalVariantPicker.camouflage_selectors,
     };
+    targetData.A__finalVariantPicker = finalVariantPicker;
   }
 
-  targetData = {
-    A__finalVariantPicker: finalVariantPickerTest,
-    B__validStructureVPC: validStructuredVPC,
-    C__precursorData: {
-      parentNode: candidateObject.parent,
-      parentFoundInAnchorMode: parentFoundInAnchorMode,
-      regexMatchingVPCs: regexMatchingVPC,
-    },
-
-    D__anchorData: {
-      nameIdElement: anchorProductFormData.validNameIdElement,
-      anchorProductForm,
-    },
-  };
+  
   return targetData;
 }
 

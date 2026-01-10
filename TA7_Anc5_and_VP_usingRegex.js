@@ -201,9 +201,16 @@ function getVariantPickersHavingValidStructure(
 ) {
   const potentialVariantPickers = variantPickerCandidates.reduce(
     (acc, vp_candidate) => {
-      const option_wrappers = Array.from(vp_candidate.children).filter(
+
+      // PRODUCTION : 
+      // const option_wrappers = Array.from(vp_candidate.children).filter(
+      //   (child) => variantPickerCandidates.includes(child)
+      // );
+
+      // TESTING : 
+      const option_wrappers = Array.from(vp_candidate.querySelectorAll('*')).filter(
         (child) => variantPickerCandidates.includes(child)
-      );
+      )
 
       if (option_wrappers.length === optionNamesInJSON.length) {
         acc.push({ vp_candidate, option_wrappers });
@@ -802,3 +809,4 @@ await test();
 
 // THEN CHECK THIS : https://truekit.eu/products/true-kit-discovery
 // here our logic of vpc as fieldsets and direct children of vpc is failing.
+// [RESOLVED] :  Now checking all the descendants of the vp_candidate instead on only immediate children.

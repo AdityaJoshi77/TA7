@@ -3,7 +3,7 @@
 // Most shopify themes need an html element which will hold the id of the current variant
 // for the add-to-cart / buy form submission.
 // If this is found, we proceed ahead, if not, we revert to manual extraction.
-function findVariantIdAnchor() {
+function findAnchorProductForm() {
   const anchors = Array.from(
     document.querySelectorAll('input[name="id"], select[name="id"]')
   );
@@ -15,26 +15,30 @@ function findVariantIdAnchor() {
 
   const productFormRegex = /product[-_]*.*[-_]*form/i;
 
-  const anchorProductForm = anchors.find((el) => {
-    const form = el.closest("form");
-    if (!form) return false;
+  let anchorProductForm = null;
+  const validNameIdElement = anchors.find((el) => {
+    anchorProductForm = el.closest("form");
+    if (!anchorProductForm) return false;
 
     // the true product form holds the add to cart button, 
     // and therefore cannot be hidden
     let isFormVisible = false;
-    const style = getComputedStyle(form);
+    const style = getComputedStyle(anchorProductForm);
     isFormVisible =
       style.display !== "none" &&
       style.visibility !== "hidden" &&
       parseFloat(style.opacity) > 0 &&
-      form.offsetParent !== null &&
-      form.getClientRects().length > 0;
+      anchorProductForm.offsetParent !== null &&
+      anchorProductForm.getClientRects().length > 0;
 
-    return isFormVisible && formMatchesRegex(form, productFormRegex);
+    return isFormVisible && formMatchesRegex(anchorProductForm, productFormRegex);
   });
 
-  if (anchorProductForm) {
-    return anchorProductForm;
+  if (validNameIdElement) {
+    return {
+      validNameIdElement,
+      anchorProductForm
+    }
   }
 
   console.log({
@@ -58,20 +62,19 @@ function formMatchesRegex(form, productFormRegex) {
 }
 
 // HELPER:
-// to get the specified ancestor of variantID anchor which could
+// to get the specified ancestor of variantID anchorProductForm which could
 // be a potential container of variant picker.
-// Unless specified, we get the 4th ancestor of the variantID anchor.
-function getParentNode(node, recall = false) {
+// Unless specified, we get the 4th ancestor of the variantID anchorProductForm.
+function getParentNode(node, maxDepth = 4, recall = false) {
   let current;
   let candidate;
 
   if (!recall) {
-    // anchor mode
+    // anchorProductForm mode
     current = node.parentElement;
     candidate = current;
 
     let depth = 0;
-    const maxDepth = 4;
 
     while (current && current !== document.body && depth < maxDepth) {
       candidate = current;
@@ -94,7 +97,7 @@ function getParentNode(node, recall = false) {
 // we find the element whose tagName, or one of the classes
 // matches with phrases like variant-picker, option_selectors, etc.
 // most theme would resort to this kind of nomenclature.
-function getVariantPickerCandidates(parentNode, productJSON) {
+function getRegexMatchingVariantPickerCandidates(parentNode, productJSON) {
   const array_A = [
     "variant",
     "variants",
@@ -104,6 +107,7 @@ function getVariantPickerCandidates(parentNode, productJSON) {
     "product",
     "selector",
     "productform", // testing
+    "globo"
   ];
   const array_B = [
     "variant",
@@ -190,9 +194,9 @@ async function getProductData(ta7_debug = false) {
 // productJSON. a mainContainerCandidate which has all the matching nodes is eligible to the'
 // MVP.
 
-function findVariantPickerBasedOnOptionAxes(
+function getVariantPickersHavingValidStructure(
   variantPickerCandidates,
-  optionNamesInJSON
+  optionNamesInJSON // getVariantPickersHavingValidStructure
 ) {
   const potentialVariantPickers = variantPickerCandidates.reduce(
     (acc, vp_candidate) => {
@@ -212,7 +216,7 @@ function findVariantPickerBasedOnOptionAxes(
   return potentialVariantPickers;
 }
 
-function detectOptionValues_2(
+function getCorrectVariantPickerWithSelectors(
   vp_candidate,
   optionCount,
   optionValueRack,
@@ -648,11 +652,11 @@ function isValidVariantPicker(
 }
 
 async function test() {
-  const anchor = findVariantIdAnchor();
+  const anchorProductFormData = findAnchorProductForm();
 
-  // Failure to find the anchor
+  // Failure to find the anchorProductForm
   // INFERENCE: Our fundamental assumptions are violated by the theme. (Absolute Failure)
-  if (!anchor) {
+  if (!anchorProductFormData) {
     const statusObject = {
       status: "[TA7] Failed",
       cause: "variantID anchorForm not found",
@@ -660,6 +664,9 @@ async function test() {
     console.log(statusObject);
     return statusObject;
   }
+
+  console.log({anchorProductFormData});
+  const anchorProductForm = anchorProductFormData.anchorProductForm;
 
   // GET PRODUCT DATA
   const product = await getProductData();
@@ -669,9 +676,9 @@ async function test() {
 
   // Find a stable parent,
   // and look for eligible variant picker candidates in that parent
-  let candidateObject = getParentNode(anchor, false);
+  let candidateObject = getParentNode(anchorProductForm, false);
   let parentFoundInAnchorMode = true;
-  let variantPickerCandidates = getVariantPickerCandidates(
+  let variantPickerCandidates = getRegexMatchingVariantPickerCandidates(
     candidateObject.parent,
     product
   );
@@ -685,7 +692,7 @@ async function test() {
   ) {
     parentFoundInAnchorMode = false;
     candidateObject = getParentNode(candidateObject.parent, true);
-    variantPickerCandidates = getVariantPickerCandidates(
+    variantPickerCandidates = getRegexMatchingVariantPickerCandidates(
       candidateObject.parent
     );
   }
@@ -696,7 +703,7 @@ async function test() {
     console.log({
       status: "[TA7 failed] : No variant picker found",
       cause: candidateObject.isBodyNext ? "Body hit" : "Fault in Anchor",
-      anchor,
+      anchorProductForm,
       parent: candidateObject.parent,
     });
     return [];
@@ -706,7 +713,7 @@ async function test() {
     targetData,
     finalVariantPickerTest = null;
 
-  variantPickerData = findVariantPickerBasedOnOptionAxes(
+  variantPickerData = getVariantPickersHavingValidStructure(
     variantPickerCandidates,
     optionNames
   );
@@ -717,7 +724,7 @@ async function test() {
       : product.options[0].values;
 
   for (const item of variantPickerData) {
-    const finalSelectorResult = detectOptionValues_2(
+    const finalSelectorResult = getCorrectVariantPickerWithSelectors(
       item,
       product.options.length,
       newOptionValueRack,
@@ -758,8 +765,8 @@ async function test() {
     },
 
     D__anchorData: {
-      anchor: anchor,
-      productForm: anchor.parentElement,
+      nameIdElement: anchorProductFormData.validNameIdElement,
+      anchorProductForm,
     },
   };
   return targetData;
@@ -769,6 +776,11 @@ await test();
 
 // 1. [DONE] : place the selectors in their corresponding option-wrappers,
 // 2. [DONE] : Filter out the correct selectors if there are strays in the selectors list.
-// 3. Also, instead of option values, variantIds are used in the data-* values of the selectors. How would you tackle that issue ?
+// 3. Also, instead of option values, variantIds are used in the data-* values of the selectors. How would you tackle that issue ? https://innovadiscgolfcanada.ca/products/wombat3-proto-glow-champion
+// 4. 3rd Party Variant Pickers
 
-// 4. What about stores where you get more
+// CHECK THIS FIRST : https://evercraftatelier.com/products/wifey-est-couple-personalized-custom-unisex-sweatshirt-with-design-on-sleeve-gift-for-husband-wife-anniversary?variant=52663926522219 
+// our variant picker regex is failing
+
+// THEN CHECK THIS : https://truekit.eu/products/true-kit-discovery
+// here our logic of vpc as fieldsets and direct children of vpc is failing.

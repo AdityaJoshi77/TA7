@@ -665,7 +665,6 @@ async function test() {
     return statusObject;
   }
 
-  console.log({anchorProductFormData});
   const anchorProductForm = anchorProductFormData.anchorProductForm;
 
   // GET PRODUCT DATA
@@ -678,7 +677,7 @@ async function test() {
   // and look for eligible variant picker candidates in that parent
   let candidateObject = getParentNode(anchorProductForm, false);
   let parentFoundInAnchorMode = true;
-  let variantPickerCandidates = getRegexMatchingVariantPickerCandidates(
+  let regexMatchingVPC = getRegexMatchingVariantPickerCandidates(
     candidateObject.parent,
     product
   );
@@ -687,19 +686,19 @@ async function test() {
   // look for the same in a higher parentNode.
   while (
     candidateObject &&
-    !variantPickerCandidates.length &&
+    !regexMatchingVPC.length &&
     !candidateObject.isBodyNext
   ) {
     parentFoundInAnchorMode = false;
     candidateObject = getParentNode(candidateObject.parent, true);
-    variantPickerCandidates = getRegexMatchingVariantPickerCandidates(
+    regexMatchingVPC = getRegexMatchingVariantPickerCandidates(
       candidateObject.parent
     );
   }
 
   // Failure to find the variant picker candidates
   // INFERENCE : The variant picker regex might be insufficient
-  if (!variantPickerCandidates.length) {
+  if (!regexMatchingVPC.length) {
     console.log({
       status: "[TA7 failed] : No variant picker found",
       cause: candidateObject.isBodyNext ? "Body hit" : "Fault in Anchor",
@@ -713,8 +712,8 @@ async function test() {
     targetData,
     finalVariantPickerTest = null;
 
-  variantPickerData = getVariantPickersHavingValidStructure(
-    variantPickerCandidates,
+  validStructuredVPC = getVariantPickersHavingValidStructure(
+    regexMatchingVPC,
     optionNames
   );
 
@@ -723,7 +722,7 @@ async function test() {
       ? product.options.map((option) => option.values[0])
       : product.options[0].values;
 
-  for (const item of variantPickerData) {
+  for (const item of validStructuredVPC) {
     const finalSelectorResult = getCorrectVariantPickerWithSelectors(
       item,
       product.options.length,
@@ -757,11 +756,11 @@ async function test() {
 
   targetData = {
     A__finalVariantPicker: finalVariantPickerTest,
-    B__mainTargetData: variantPickerData,
+    B__validStructureVPC: validStructuredVPC,
     C__precursorData: {
       parentNode: candidateObject.parent,
       parentFoundInAnchorMode: parentFoundInAnchorMode,
-      mainContainerCandidates: variantPickerCandidates,
+      regexMatchingVPCs: regexMatchingVPC,
     },
 
     D__anchorData: {

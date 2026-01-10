@@ -65,7 +65,7 @@ function formMatchesRegex(form, productFormRegex) {
 // to get the specified ancestor of variantID anchorProductForm which could
 // be a potential container of variant picker.
 // Unless specified, we get the 4th ancestor of the variantID anchorProductForm.
-function getParentNodeForVPCSearch(node, maxDepth = 4, recall = false) {
+function getParentNodeForVPCSearch(node, recall = false) {
   let current;
   let candidate;
 
@@ -74,6 +74,7 @@ function getParentNodeForVPCSearch(node, maxDepth = 4, recall = false) {
     current = node.parentElement;
     candidate = current;
 
+    maxDepth = 4
     let depth = 0;
 
     while (current && current !== document.body && depth < maxDepth) {

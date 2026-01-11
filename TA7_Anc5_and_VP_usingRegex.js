@@ -299,7 +299,7 @@ function getCorrectVariantPickerWithSelectors(
     optionsInJSON
   ); // the vp_validation_data is the set of selector yielding ova per VISIBLE fs_cand
 
-  if (optionCount > 1 && !vp_validation_data) return null;
+  if (!vp_validation_data) return null;
 
   console.log({
     vp_validation_data,
@@ -309,19 +309,30 @@ function getCorrectVariantPickerWithSelectors(
   let matchedAttributes = new Set();
   let selectors = new Set();
   let dataValuesMatched = new Set();
-
   let optionExtractionKeys = []; // used for selector assortment as per data-* value
 
   if (optionCount > 1) {
-    for (let optionValueIndex in optionValueRack) {
+    let reducedOptionValueRack = vp_validation_data.fieldSetMap.filter(
+      (index) => index !== -1
+    );
+
+    console.log({ optionValueRack });
+
+    // for (let optionValueIndex in optionValueRack)
+    for (let optionValueIndex of reducedOptionValueRack) {
       let optionExtKey = {
         optionAxis: optionsInJSON[optionValueIndex],
         ov_attribute: [],
         fs_cand: null,
       };
 
-      for (let fs_cand of vp_candidate.option_wrappers) {
-        for (let ov_attribute of OPTION_VALUE_ATTRIBUTES) {
+      let visually_present_fieldsets =
+        vp_validation_data.visually_present_fs_cand_indices;
+      for (let fs_cand_index of visually_present_fieldsets) {
+        let fs_cand = vp_candidate.option_wrappers[fs_cand_index];
+        let matching_ova_inFsCand =
+          vp_validation_data.selector_yielding_ova_perFsCand[fs_cand_index];
+        for (let ov_attribute of matching_ova_inFsCand) {
           const attributeSelector = `[${ov_attribute}="${CSS.escape(
             optionValueRack[optionValueIndex]
           )}"]`;
@@ -347,14 +358,16 @@ function getCorrectVariantPickerWithSelectors(
       }
     }
   } else {
-    let fs_cand = vp_candidate.option_wrappers[0];
+    let fs_cand = vp_validation_data.fieldSet;
     let optionExtKey = {
       optionAxis: optionValueRack,
       ov_attribute: [],
       fs_cand: null,
     };
+    let matching_ova_inFsCand =
+      vp_validation_data.selector_yielding_ova_perFsCand[0];
 
-    for (let ov_attribute of OPTION_VALUE_ATTRIBUTES) {
+    for (let ov_attribute of matching_ova_inFsCand) {
       for (let optionValue of optionValueRack) {
         const attributeSelector = `[${ov_attribute}="${CSS.escape(
           optionValue
@@ -381,7 +394,16 @@ function getCorrectVariantPickerWithSelectors(
   };
 
   // testing optionValuesAssortment :
-  if (optionExtractionKeys.length === optionCount) {
+  let optionExtKeyGenSuccess = false;
+  if (optionCount > 1) {
+    optionExtKeyGenSuccess =
+      optionExtractionKeys.length ===
+      vp_validation_data.visually_present_fs_cand_indices.length;
+  } else {
+    optionExtKeyGenSuccess = optionExtractionKeys.length === 1;
+  }
+
+  if (optionExtKeyGenSuccess) {
     console.log({
       option_extraction_status: "[Success]",
       optionExtractionKeys,
@@ -394,7 +416,8 @@ function getCorrectVariantPickerWithSelectors(
     finalSelectorResult.selector_set =
       // normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys);
       normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
-        optionExtractionKeys
+        optionExtractionKeys,
+        optionCount
       );
 
     //
@@ -417,9 +440,10 @@ function getCorrectVariantPickerWithSelectors(
 }
 
 function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
-  optionExtractionKeys
+  optionExtractionKeys,
+  optionCount
 ) {
-  let optionCount = optionExtractionKeys.length;
+  let optionExtKeyCount = optionExtractionKeys.length;
 
   let finalSelectorSet = optionExtractionKeys.map((optionExtKey) => {
     let ov_attribute_array = Array.from(optionExtKey.ov_attribute);
@@ -432,7 +456,9 @@ function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
       let selectorSet = new Set();
 
       let optionValuesInAxis =
-        optionCount > 1
+        optionExtKeyCount > 1
+          ? optionExtKey.optionAxis.values
+          : optionCount > 1
           ? optionExtKey.optionAxis.values
           : optionExtKey.optionAxis;
 
@@ -485,9 +511,10 @@ function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
 }
 
 function normalizeSelectorSetForMultiOptionCount_filtered(
-  optionExtractionKeys
+  optionExtractionKeys,
+  optionCount
 ) {
-  let optionCount = optionExtractionKeys.length;
+  let optionExtKeyCount = optionExtractionKeys.length;
   let finalSelectorSet = optionExtractionKeys.map((optionExtKey) => {
     let ov_attribute_array = Array.from(optionExtKey.ov_attribute);
     let selectorsPerOptionAxisPerOVA = new Object();
@@ -496,7 +523,7 @@ function normalizeSelectorSetForMultiOptionCount_filtered(
     for (let ov_attribute of ov_attribute_array) {
       selectorsPerOptionAxisPerOVA[ov_attribute] = new Set();
       let optionValuesInAxis =
-        optionCount > 1
+        optionExtKeyCount > 1
           ? optionExtKey.optionAxis.values
           : optionExtKey.optionAxis;
       for (let optionValue of optionValuesInAxis) {
@@ -671,7 +698,10 @@ function isValidVariantPicker(
       console.log({
         selector_yielding_ova_perFsCand,
       });
-      return {selector_yielding_ova_perFsCand};
+      return {
+        selector_yielding_ova_perFsCand,
+        fieldSet: vp_candidate.option_wrappers[0],
+      };
     } else {
       return false;
     }
@@ -718,7 +748,7 @@ function isValidVariantPicker(
     return {
       selector_yielding_ova_perFsCand,
       visually_present_fs_cand_indices,
-      fieldSetMap
+      fieldSetMap,
     };
   }
 

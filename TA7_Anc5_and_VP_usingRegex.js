@@ -893,6 +893,12 @@ async function test() {
     targetData.A__finalVariantPicker = finalVariantPicker;
   }
 
+  if(targetData.A__finalVariantPicker){
+    return {
+      Variant_Picker : targetData.A__finalVariantPicker
+    }
+  }
+
   return targetData;
 }
 

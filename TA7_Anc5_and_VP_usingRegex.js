@@ -254,39 +254,6 @@ function getCorrectVariantPickerWithSelectors(
   optionValueRack,
   optionsInJSON
 ) {
-  const OPTION_VALUE_ATTRIBUTES = [
-    // Tier 1 — high-confidence, canonical
-    "value",
-    "data-option-value",
-    "data-option-value-id",
-    "data-option-id",
-    "data-value",
-    "data-value-id",
-    "data-variant-id",
-    "data-variant",
-    "data-selected-value",
-
-    // Tier 2 — handles / normalized keys
-    "data-value-handle",
-    "data-option-handle",
-    "data-handle",
-    "data-option-key",
-    "data-key",
-
-    // Tier 3 — generic but meaningful
-    "data-option",
-    "data-option-index",
-    "data-index",
-    "data-name",
-    "data-current-value",
-
-    // Tier 4 — accessibility / framework-driven
-    "orig-value",
-    "aria-label",
-    "aria-valuetext",
-    // "name",
-  ];
-
   // THE VERY FIRST CHECK :
   // Are the option wrappers in the variant picker in hand :
   // visually present
@@ -305,7 +272,73 @@ function getCorrectVariantPickerWithSelectors(
     vp_validation_data,
   });
 
-  let finalSelectorResult;
+  let { optionExtractionKeys, dataValuesMatched, matchedAttributes } =
+    generateOptionExtractionKeys(
+      vp_candidate,
+      optionCount,
+      optionValueRack,
+      optionsInJSON,
+      vp_validation_data
+    );
+
+  let finalSelectorResult = {
+    dataValuesMatched,
+    matchedAttributes,
+  };
+
+  // testing optionValuesAssortment :
+  let optionExtKeyGenSuccess = false;
+  if (optionCount > 1) {
+    optionExtKeyGenSuccess =
+      optionExtractionKeys.length ===
+      vp_validation_data.visually_present_fs_cand_indices.length;
+  } else {
+    optionExtKeyGenSuccess = optionExtractionKeys.length === 1;
+  }
+
+  if (optionExtKeyGenSuccess) {
+    console.log({
+      option_extraction_status: "[Success]",
+      optionExtractionKeys,
+    });
+
+    // QUESTION TO ADDRESS : How would you know that which selector is correct ?
+    // The parent wrapper of the correct selector set will be visually present.
+
+    // call the function to extract selectors per option Axis per ov_attribute if optionCount > 1.
+    finalSelectorResult.selector_set =
+      // normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys);
+      normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
+        optionExtractionKeys,
+        optionCount
+      );
+
+    //
+    finalSelectorResult.selector_data = extractFinalSelectors(
+      finalSelectorResult.selector_set
+    );
+  } else {
+    console.log({
+      option_extraction_status: "[Failure]",
+      optionExtractionKeys,
+    });
+    return null;
+  }
+
+  if (finalSelectorResult.selector_set.length) {
+    return finalSelectorResult;
+  }
+
+  return null;
+}
+
+function generateOptionExtractionKeys(
+  vp_candidate,
+  optionCount,
+  optionValueRack,
+  optionsInJSON,
+  vp_validation_data
+) {
   let matchedAttributes = new Set();
   let selectors = new Set();
   let dataValuesMatched = new Set();
@@ -387,56 +420,13 @@ function getCorrectVariantPickerWithSelectors(
   }
 
   // finalizing the selectorResult for both optionCounts (1 and >1)
-  finalSelectorResult = {
-    // selector_set: Array.from(selectors),
+  let optionExtractionKeyData = {
+    optionExtractionKeys,
     dataValuesMatched,
     matchedAttributes,
   };
 
-  // testing optionValuesAssortment :
-  let optionExtKeyGenSuccess = false;
-  if (optionCount > 1) {
-    optionExtKeyGenSuccess =
-      optionExtractionKeys.length ===
-      vp_validation_data.visually_present_fs_cand_indices.length;
-  } else {
-    optionExtKeyGenSuccess = optionExtractionKeys.length === 1;
-  }
-
-  if (optionExtKeyGenSuccess) {
-    console.log({
-      option_extraction_status: "[Success]",
-      optionExtractionKeys,
-    });
-
-    // QUESTION TO ADDRESS : How would you know that which selector is correct ?
-    // The parent wrapper of the correct selector set will be visually present.
-
-    // call the function to extract selectors per option Axis per ov_attribute if optionCount > 1.
-    finalSelectorResult.selector_set =
-      // normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys);
-      normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
-        optionExtractionKeys,
-        optionCount
-      );
-
-    //
-    finalSelectorResult.selector_data = extractFinalSelectors(
-      finalSelectorResult.selector_set
-    );
-  } else {
-    console.log({
-      option_extraction_status: "[Failure]",
-      optionExtractionKeys,
-    });
-    return null;
-  }
-
-  if (finalSelectorResult.selector_set.length) {
-    return finalSelectorResult;
-  }
-
-  return null;
+  return optionExtractionKeyData;
 }
 
 function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
@@ -868,7 +858,12 @@ async function test() {
     );
 
     if (finalSelectorResult) {
-      item.selectorData = finalSelectorResult;
+      item.selectors = finalSelectorResult.selector_data;
+      item.selectorMetaData = {
+        dataValuesMatched: finalSelectorResult.dataValuesMatched,
+        matchedAttributes: finalSelectorResult.matchedAttributes,
+        selector_set: finalSelectorResult.selector_set,
+      };
       finalVariantPicker = item;
       break;
     }
@@ -887,19 +882,24 @@ async function test() {
     finalVariantPicker = {
       a__vp_candidate: finalVariantPicker.vp_candidate,
       b__option_wrappers: finalVariantPicker.option_wrappers,
-      c__selectors: finalVariantPicker.selectorData,
-      d__camouflage_selectors: finalVariantPicker.camouflage_selectors,
+      c__selectors: finalVariantPicker.selectors,
+      d__selector_meta_data: finalVariantPicker.selectorMetaData,
+      e__camouflage_selectors: finalVariantPicker.camouflage_selectors || "Camouflage not installed on store",
     };
     targetData.A__finalVariantPicker = finalVariantPicker;
   }
 
-  if(targetData.A__finalVariantPicker){
+  if (targetData.A__finalVariantPicker) {
     return {
-      Variant_Picker : targetData.A__finalVariantPicker
-    }
+      "[TA7 VERDICT]": "Variant-Picker Detected along with selectors",
+      Variant_Picker: targetData.A__finalVariantPicker,
+    };
   }
 
-  return targetData;
+  return {
+    "[TA7 VERDICT]": "Variant picker detection failed",
+    targetData,
+  };
 }
 
 await test();
@@ -916,5 +916,7 @@ await test();
 // here our logic of vpc as fieldsets and direct children of vpc is failing.
 // [RESOLVED] :  Now checking all the descendants of the vp_candidate instead on only immediate children.
 
-// [REQUIRED] : Optimization in isVariantPickerValid() (Very important)
+// [DONE] : Optimization in isVariantPickerValid() (Very important)
 // [REQUIRED] : Enhance variant picker regex
+// [REQUIRED] : Mutation-Observer requirement.
+// [OPTIONAL] : 3rd Party Variant-pickers

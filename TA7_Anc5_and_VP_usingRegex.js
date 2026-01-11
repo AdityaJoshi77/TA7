@@ -211,14 +211,16 @@ function getVariantPickersHavingValidStructure(
       // check for vp_candidate.descendencts.length === optionCountInJSON.length.
 
       // PRODUCTION :
-      let option_wrappers = Array.from(vp_candidate.children).filter(
-        (child) => variantPickerCandidates.includes(child)
+      let option_wrappers = Array.from(vp_candidate.children).filter((child) =>
+        variantPickerCandidates.includes(child)
       );
       if (option_wrappers.length === optionCountInJSON.length) {
         acc.push({ vp_candidate, option_wrappers });
+
+        // debug log
         console.log({
-          structure_validity_confimation : "Sturcture Validiy at Children Level",
-          vp_candidate
+          structure_validity_confimation: "Sturcture Validiy at Children Level",
+          vp_candidate,
         });
       } else {
         // TESTING :
@@ -228,9 +230,12 @@ function getVariantPickersHavingValidStructure(
 
         if (option_wrappers.length === optionCountInJSON.length) {
           acc.push({ vp_candidate, option_wrappers });
+
+          // debug log
           console.log({
-            structure_validity_confimation : "Sturcture Validiy at Descendents Level",
-            vp_candidate
+            structure_validity_confimation:
+              "Sturcture Validiy at Descendents Level",
+            vp_candidate,
           });
         }
       }
@@ -286,16 +291,19 @@ function getCorrectVariantPickerWithSelectors(
   // Are the option wrappers in the variant picker in hand :
   // visually present
   // 1:1 mapped with the option axes.
-  if (
-    optionCount > 1 &&
-    !isValidVariantPicker(
-      vp_candidate,
-      optionCount,
-      optionValueRack,
-      optionsInJSON
-    )
-  )
-    return null;
+
+  let vp_validation_data = isValidVariantPicker(
+    vp_candidate,
+    optionCount,
+    optionValueRack,
+    optionsInJSON
+  ); // the vp_validation_data is the set of selector yielding ova per VISIBLE fs_cand
+
+  if (optionCount > 1 && !vp_validation_data) return null;
+
+  console.log({
+    vp_validation_data,
+  });
 
   let finalSelectorResult;
   let matchedAttributes = new Set();
@@ -609,18 +617,6 @@ function isValidVariantPicker(
   // Sometimes, the secondary option axes are hidden by the theme if they have only one option value.
 
   // PRODUCTION :
-  // let visually_present_fs_cand = new Array();
-  // visually_present_fs_cand = vp_candidate.option_wrappers.filter((fs_cand) => {
-  //   let isOptionWrapperVisible = false;
-  //   const style = getComputedStyle(fs_cand);
-  //   isOptionWrapperVisible =
-  //     style.display !== "none" &&
-  //     style.visibility !== "hidden" &&
-  //     parseFloat(style.opacity) > 0 &&
-  //     fs_cand.offsetParent !== null &&
-  //     fs_cand.getClientRects().length > 0;
-
-  // TESTING :
   const visually_present_fs_cand_indices = vp_candidate.option_wrappers.reduce(
     (acc, fs_cand, index) => {
       const style = getComputedStyle(fs_cand);
@@ -637,9 +633,6 @@ function isValidVariantPicker(
     },
     []
   );
-
-  //   return isOptionWrapperVisible;
-  // });
 
   if (visually_present_fs_cand_indices.length === 0) return null;
 
@@ -660,6 +653,10 @@ function isValidVariantPicker(
   });
 
   let selector_yielding_ova_perFsCand = [];
+
+  // IF optionCount === 1, you don't need to have 1:1 mapping with optionAxes
+  // check : 1. the option_wrapper of the vp_candidate must be visible.
+  // check : 2. You must have some ov_attributes in the fs_cand that give selectors for option values.
   if (optionCount === 1) {
     let selectorYieldingOVAList = ov_attributes_filtered_per_fsCand[0].filter(
       (ova) => {
@@ -674,7 +671,7 @@ function isValidVariantPicker(
       console.log({
         selector_yielding_ova_perFsCand,
       });
-      return true;
+      return {selector_yielding_ova_perFsCand};
     } else {
       return false;
     }
@@ -705,7 +702,7 @@ function isValidVariantPicker(
         } else {
           console.log({
             "isValidVariantPicker()": "1:1 mapping failed",
-            fs_cand : fs_candidates[fs_cand_index],
+            fs_cand: fs_candidates[fs_cand_index],
           });
           return false;
         }
@@ -718,7 +715,11 @@ function isValidVariantPicker(
     console.log({
       selector_yielding_ova_perFsCand,
     });
-    return true;
+    return {
+      selector_yielding_ova_perFsCand,
+      visually_present_fs_cand_indices,
+      fieldSetMap
+    };
   }
 
   console.log({

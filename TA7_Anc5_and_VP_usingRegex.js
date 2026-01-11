@@ -520,40 +520,7 @@ function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
   return finalSelectorSet;
 }
 
-function normalizeSelectorSetForMultiOptionCount_filtered(
-  optionExtractionKeys,
-  optionCount
-) {
-  let optionExtKeyCount = optionExtractionKeys.length;
-  let finalSelectorSet = optionExtractionKeys.map((optionExtKey) => {
-    let ov_attribute_array = Array.from(optionExtKey.ov_attribute);
-    let selectorsPerOptionAxisPerOVA = new Object();
-    let fs_cand = optionExtKey.fs_cand;
 
-    for (let ov_attribute of ov_attribute_array) {
-      selectorsPerOptionAxisPerOVA[ov_attribute] = new Set();
-      let optionValuesInAxis =
-        optionExtKeyCount > 1
-          ? optionExtKey.optionAxis.values
-          : optionExtKey.optionAxis;
-      for (let optionValue of optionValuesInAxis) {
-        const attributeSelector = `[${ov_attribute}="${CSS.escape(
-          optionValue
-        )}"]`;
-        let selector = fs_cand.querySelector(attributeSelector);
-        if (selector) selectorsPerOptionAxisPerOVA[ov_attribute].add(selector);
-      }
-
-      selectorsPerOptionAxisPerOVA[ov_attribute] = Array.from(
-        selectorsPerOptionAxisPerOVA[ov_attribute]
-      );
-    }
-
-    return selectorsPerOptionAxisPerOVA;
-  });
-
-  return finalSelectorSet;
-}
 
 // HELPER:
 // Checks the selectors' validity :
@@ -908,13 +875,13 @@ async function test() {
 
   if (targetData.A__finalVariantPicker) {
     return {
-      "[TA7 VERDICT]": "Variant-Picker Detected along with selectors",
+      "[TA7 VERDICT]": "Success",
       Variant_Picker: targetData.A__finalVariantPicker,
     };
   }
 
   return {
-    "[TA7 VERDICT]": "Variant picker detection failed",
+    "[TA7 VERDICT]": "Failure",
     targetData,
   };
 }
@@ -936,4 +903,6 @@ await test();
 // [DONE] : Optimization in isVariantPickerValid() (Very important)
 // [REQUIRED] : Enhance variant picker regex
 // [REQUIRED] : Mutation-Observer requirement.
+// [REQUIRED] : If you get two selector set such that both of them are visible, which would we select.
+//      eg : https://evercraftatelier.com/products/wifey-est-couple-personalized-custom-unisex-sweatshirt-with-design-on-sleeve-gift-for-husband-wife-anniversary?variant=52663929012587
 // [OPTIONAL] : 3rd Party Variant-pickers

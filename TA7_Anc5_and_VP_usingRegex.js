@@ -50,6 +50,17 @@ function findAnchorProductForm() {
   return null;
 }
 
+function isElementVisible(el) {
+  const style = getComputedStyle(el);
+  return (
+    style.display !== "none" &&
+    style.visibility !== "hidden" &&
+    parseFloat(style.opacity) > 0 &&
+    el.offsetParent !== null &&
+    el.getClientRects().length > 0
+  );
+}
+
 // HELPER:
 // To find a match for the productFormRegex in the findVariantIdAnchor()
 function formMatchesRegex(form, productFormRegex) {
@@ -222,6 +233,15 @@ function getVariantPickersHavingValidStructure(
           structure_validity_confimation: "Sturcture Validiy at Children Level",
           vp_candidate,
         });
+      } else if (
+        Array.from(vp_candidate.children).length === optionCountInJSON.length
+      ) {
+        // debug log
+        console.log({
+          structure_validity_confimation: "Sturcture Validiy assumed since optionCount === vpc.children",
+          vp_candidate,
+        });
+        acc.push({ vp_candidate, option_wrappers : Array.from(vp_candidate.children) });
       } else {
         // TESTING :
         option_wrappers = Array.from(vp_candidate.querySelectorAll("*")).filter(
@@ -884,7 +904,9 @@ async function test() {
       b__option_wrappers: finalVariantPicker.option_wrappers,
       c__selectors: finalVariantPicker.selectors,
       d__selector_meta_data: finalVariantPicker.selectorMetaData,
-      e__camouflage_selectors: finalVariantPicker.camouflage_selectors || "Camouflage not installed on store",
+      e__camouflage_selectors:
+        finalVariantPicker.camouflage_selectors ||
+        "Camouflage not installed on store",
     };
     targetData.A__finalVariantPicker = finalVariantPicker;
   }

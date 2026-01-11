@@ -20,7 +20,7 @@ function findAnchorProductForm() {
     anchorProductForm = el.closest("form");
     if (!anchorProductForm) return false;
 
-    // the true product form holds the add to cart button, 
+    // the true product form holds the add to cart button,
     // and therefore cannot be hidden
     let isFormVisible = false;
     const style = getComputedStyle(anchorProductForm);
@@ -31,14 +31,16 @@ function findAnchorProductForm() {
       anchorProductForm.offsetParent !== null &&
       anchorProductForm.getClientRects().length > 0;
 
-    return isFormVisible && formMatchesRegex(anchorProductForm, productFormRegex);
+    return (
+      isFormVisible && formMatchesRegex(anchorProductForm, productFormRegex)
+    );
   });
 
   if (validNameIdElement) {
     return {
       validNameIdElement,
-      anchorProductForm
-    }
+      anchorProductForm,
+    };
   }
 
   console.log({
@@ -74,7 +76,7 @@ function getParentNodeForVPCSearch(node, recall = false) {
     current = node.parentElement;
     candidate = current;
 
-    maxDepth = 4
+    maxDepth = 4;
     let depth = 0;
 
     while (current && current !== document.body && depth < maxDepth) {
@@ -108,7 +110,7 @@ function getRegexMatchingVariantPickerCandidates(parentNode, productJSON) {
     "product",
     "selector",
     "productform", // testing
-    "globo"
+    "globo",
   ];
   const array_B = [
     "variant",
@@ -201,16 +203,15 @@ function getVariantPickersHavingValidStructure(
 ) {
   const potentialVariantPickers = variantPickerCandidates.reduce(
     (acc, vp_candidate) => {
-
-      // PRODUCTION : 
+      // PRODUCTION :
       // const option_wrappers = Array.from(vp_candidate.children).filter(
       //   (child) => variantPickerCandidates.includes(child)
       // );
 
-      // TESTING : 
-      const option_wrappers = Array.from(vp_candidate.querySelectorAll('*')).filter(
-        (child) => variantPickerCandidates.includes(child)
-      )
+      // TESTING :
+      const option_wrappers = Array.from(
+        vp_candidate.querySelectorAll("*")
+      ).filter((child) => variantPickerCandidates.includes(child));
 
       if (option_wrappers.length === optionNamesInJSON.length) {
         acc.push({ vp_candidate, option_wrappers });
@@ -260,7 +261,7 @@ function getCorrectVariantPickerWithSelectors(
     "orig-value",
     "aria-label",
     "aria-valuetext",
-    "name",
+    // "name",
   ];
 
   // THE VERY FIRST CHECK :
@@ -573,28 +574,12 @@ function isValidVariantPicker(
     "orig-value",
     "aria-label",
     "aria-valuetext",
-    "name",
+    // "name",
   ];
 
   // check 1 : if none of the fs_cand in the vpc are visually present, return null
-
-  // DEPRECATED :
-  // Returns null if any fs_cand is visually hidden
-  // why deprecated : sometimes the secondary option axes get hidden when only one of their options is available
-  // for (let fs_cand of vp_candidate.option_wrappers) {
-  //   let isOptionWrapperVisible = false;
-  //   const style = getComputedStyle(fs_cand);
-
-  //   isOptionWrapperVisible =
-  //     style.display !== "none" &&
-  //     style.visibility !== "hidden" &&
-  //     parseFloat(style.opacity) > 0 &&
-  //     fs_cand.offsetParent !== null &&
-  //     fs_cand.getClientRects().length > 0;
-
-  //   if (!isOptionWrapperVisible) return null;
-  // }
-
+  // WHY NOT ENFORCE THE VISIBILITY OF ALL THE FS_CANDs ?
+  // Sometimes, the secondary option axes are hidden by the theme if they have only one option value.
   let visually_present_fs_cand = new Array();
   visually_present_fs_cand = vp_candidate.option_wrappers.filter((fs_cand) => {
     let isOptionWrapperVisible = false;
@@ -614,8 +599,8 @@ function isValidVariantPicker(
   // check 2 : the visually present fs_cand set and optionAxes have a 1:1 mapping
 
   // ov_attribute filteration :
-  // check which ov_attribute are found in each visually present fs_cand, remove needless combos
-  let ov_attributes_filtered_per_fsCand = visually_present_fs_cand.map(
+  // check which ov_attribute are found in each fs_cand (even if visually hidden), remove needless combos
+  let ov_attributes_filtered_per_fsCand = vp_candidate.option_wrappers.map(
     (fs_cand) => {
       let matched_ova = OPTION_VALUE_ATTRIBUTES.filter((ova) =>
         fs_cand.querySelector(`[${ova}]`)
@@ -624,8 +609,10 @@ function isValidVariantPicker(
     }
   );
 
+  let selector_yielding_ova_perFsCand = [];
+
   let fieldSetMap = new Array(optionCount).fill(-1);
-  let fs_candidates = visually_present_fs_cand;
+  let fs_candidates = visually_present_fs_cand; // we need to confirm 1:1 mapping only for the visually present fs_cands
   for (
     let fs_cand_index = 0;
     fs_cand_index < fs_candidates.length;
@@ -636,9 +623,9 @@ function isValidVariantPicker(
       optionAxisIndex < optionValuesRack.length;
       optionAxisIndex++
     ) {
-      let selectorDetected = ov_attributes_filtered_per_fsCand[
+      let selectorYieldingOVAList = ov_attributes_filtered_per_fsCand[
         fs_cand_index
-      ].some((ova) => {
+      ].filter((ova, index) => {
         let attributeSelector = `[${ova}="${CSS.escape(
           optionValuesRack[optionAxisIndex]
         )}"]`;
@@ -646,9 +633,10 @@ function isValidVariantPicker(
         return fs_cand.querySelector(attributeSelector);
       });
 
-      if (selectorDetected) {
+      if (selectorYieldingOVAList.length > 0) {
         if (fieldSetMap[fs_cand_index] === -1) {
           fieldSetMap[fs_cand_index] = optionAxisIndex;
+          selector_yielding_ova_perFsCand.push(selectorYieldingOVAList);
         } else {
           return false;
         }
@@ -656,20 +644,32 @@ function isValidVariantPicker(
     }
   }
 
-  return true;
+  // return true;
+  if (fieldSetMap.some((value) => value !== -1)) {
+    console.log({
+      selector_yielding_ova_perFsCand
+    });
+    return true;
+  }
+
+  console.log({
+    "inValidVariantPicker()":
+      "No fs_cand is 1:1 mapped with option Axes in the current VPC",
+  });
+
+  return null;
 }
 
 async function test() {
-
   let targetData = {
     A__finalVariantPicker: null, //finalVariantPickerTest,
     B__validStructureVPC: null, //validStructuredVPC,
     C__regexMatchingVPCs: null, // regexMatchingVPC,
-    D__parentNodeForVPCSearch : null, // {
+    D__parentNodeForVPCSearch: null, // {
     //  searchNode : candidateObject.parent,
     //  parentFoundInAnchorMode
     // }
-    E__anchorData: null//{
+    E__anchorData: null, //{
     //   nameIdElement: anchorProductFormData.validNameIdElement,
     //   anchorProductForm,
     // },
@@ -690,8 +690,8 @@ async function test() {
 
   const anchorProductForm = anchorProductFormData.anchorProductForm;
   targetData.E__anchorData = {
-    nameIdElement : anchorProductFormData.validNameIdElement,
-    anchorProductForm
+    nameIdElement: anchorProductFormData.validNameIdElement,
+    anchorProductForm,
   };
 
   // GET PRODUCT DATA
@@ -724,15 +724,15 @@ async function test() {
   }
 
   targetData.D__parentNodeForVPCSearch = {
-    searchNode : candidateObject.parent,
-    parentFoundInAnchorMode
-  }
+    searchNode: candidateObject.parent,
+    parentFoundInAnchorMode,
+  };
 
   // Failure to find the variant picker candidates
   // INFERENCE : The variant picker regex might be insufficient
   if (!regexMatchingVPC.length) {
     console.log({
-      status: "[TA7 failed] : No DOM node matched with variant picker regex"
+      status: "[TA7 failed] : No DOM node matched with variant picker regex",
     });
     return targetData;
   }
@@ -744,9 +744,9 @@ async function test() {
     optionNames
   );
 
-  if(!validStructuredVPC.length){
+  if (!validStructuredVPC.length) {
     console.log({
-      status: "[TA7 failed] : No regex matching VPC is structurally valid"
+      status: "[TA7 failed] : No regex matching VPC is structurally valid",
     });
     return targetData;
   }
@@ -793,7 +793,6 @@ async function test() {
     targetData.A__finalVariantPicker = finalVariantPicker;
   }
 
-  
   return targetData;
 }
 
@@ -804,9 +803,12 @@ await test();
 // 3. Also, instead of option values, variantIds are used in the data-* values of the selectors. How would you tackle that issue ? https://innovadiscgolfcanada.ca/products/wombat3-proto-glow-champion
 // 4. 3rd Party Variant Pickers
 
-// CHECK THIS FIRST : https://evercraftatelier.com/products/wifey-est-couple-personalized-custom-unisex-sweatshirt-with-design-on-sleeve-gift-for-husband-wife-anniversary?variant=52663926522219 
+// CHECK THIS FIRST : https://evercraftatelier.com/products/wifey-est-couple-personalized-custom-unisex-sweatshirt-with-design-on-sleeve-gift-for-husband-wife-anniversary?variant=52663926522219
 // our variant picker regex is failing
 
 // THEN CHECK THIS : https://truekit.eu/products/true-kit-discovery
 // here our logic of vpc as fieldsets and direct children of vpc is failing.
 // [RESOLVED] :  Now checking all the descendants of the vp_candidate instead on only immediate children.
+
+// [REQUIRED] : Optimization in isVariantPickerValid() (Very important)
+// [REQUIRED] : Enhance variant picker regex

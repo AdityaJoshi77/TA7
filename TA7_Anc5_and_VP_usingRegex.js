@@ -572,15 +572,10 @@ function extractFinalSelectors(selector_set) {
 
     // Slow path: ambiguity → test behaviorally
     for (const [ov_attribute, selectors] of entries) {
-      const selectorWrapper = selectors[0].parentElement;
-      const style = getComputedStyle(selectorWrapper);
+      let isSelectorVisible = false;
+      isSelectorVisible = selectors.some(selector => isElementVisible(selector))
 
-      const isSelectorWrapperVisible =
-        style.display !== "none" &&
-        style.visibility !== "hidden" &&
-        selectors[0].offsetParent !== null;
-
-      if (isSelectorWrapperVisible) {
+      if (isSelectorVisible) {
         extractedSelectorData.push({
           attribute_name: ov_attribute,
           selectors,

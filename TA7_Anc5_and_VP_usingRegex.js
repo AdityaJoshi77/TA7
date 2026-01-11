@@ -608,8 +608,31 @@ function isValidVariantPicker(
       return matched_ova;
     }
   );
+  console.log({
+    ov_attributes_filtered_per_fsCand
+  });
 
   let selector_yielding_ova_perFsCand = [];
+  if(optionCount === 1){
+    let selectorYieldingOVAList = ov_attributes_filtered_per_fsCand[0].filter((ova) => {
+        let attributeSelector = `[${ova}="${CSS.escape(
+          optionValuesRack[0]
+        )}"]`;
+        let fs_cand = vp_candidate.option_wrappers[0];
+        return fs_cand.querySelector(attributeSelector);
+      });
+
+    if(selectorYieldingOVAList.length > 0){
+      selector_yielding_ova_perFsCand.push(selectorYieldingOVAList)
+      console.log({
+        selector_yielding_ova_perFsCand
+      });
+      return true;
+    } else {
+      return false;
+    }
+  }
+
 
   let fieldSetMap = new Array(optionCount).fill(-1);
   let fs_candidates = visually_present_fs_cand; // we need to confirm 1:1 mapping only for the visually present fs_cands
@@ -625,7 +648,7 @@ function isValidVariantPicker(
     ) {
       let selectorYieldingOVAList = ov_attributes_filtered_per_fsCand[
         fs_cand_index
-      ].filter((ova, index) => {
+      ].filter((ova) => {
         let attributeSelector = `[${ova}="${CSS.escape(
           optionValuesRack[optionAxisIndex]
         )}"]`;

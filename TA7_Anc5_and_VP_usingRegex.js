@@ -199,22 +199,40 @@ async function getProductData(ta7_debug = false) {
 
 function getVariantPickersHavingValidStructure(
   variantPickerCandidates,
-  optionNamesInJSON // getVariantPickersHavingValidStructure
+  optionCountInJSON // getVariantPickersHavingValidStructure
 ) {
   const potentialVariantPickers = variantPickerCandidates.reduce(
     (acc, vp_candidate) => {
+      // THIS PART NEEDS A MORE SOLID FIX:
+      // IT WILL FAIL FOR SOME CASES WHERE optionCountINJson === 1
+
+      // CURRENT LOGIC :
+      // If the vp_candidate.children !== optionCountInJSON.length
+      // check for vp_candidate.descendencts.length === optionCountInJSON.length.
+
       // PRODUCTION :
-      // const option_wrappers = Array.from(vp_candidate.children).filter(
-      //   (child) => variantPickerCandidates.includes(child)
-      // );
-
-      // TESTING :
-      const option_wrappers = Array.from(
-        vp_candidate.querySelectorAll("*")
-      ).filter((child) => variantPickerCandidates.includes(child));
-
-      if (option_wrappers.length === optionNamesInJSON.length) {
+      let option_wrappers = Array.from(vp_candidate.children).filter(
+        (child) => variantPickerCandidates.includes(child)
+      );
+      if (option_wrappers.length === optionCountInJSON.length) {
         acc.push({ vp_candidate, option_wrappers });
+        console.log({
+          structure_validity_confimation : "Sturcture Validiy at Children Level",
+          vp_candidate
+        });
+      } else {
+        // TESTING :
+        option_wrappers = Array.from(vp_candidate.querySelectorAll("*")).filter(
+          (child) => variantPickerCandidates.includes(child)
+        );
+
+        if (option_wrappers.length === optionCountInJSON.length) {
+          acc.push({ vp_candidate, option_wrappers });
+          console.log({
+            structure_validity_confimation : "Sturcture Validiy at Descendents Level",
+            vp_candidate
+          });
+        }
       }
 
       return acc;
@@ -376,6 +394,10 @@ function getCorrectVariantPickerWithSelectors(
       finalSelectorResult.selector_set
     );
   } else {
+    console.log({
+      option_extraction_status: "[Failure]",
+      optionExtractionKeys,
+    });
     return null;
   }
 
@@ -577,24 +599,49 @@ function isValidVariantPicker(
     // "name",
   ];
 
+  // execution check :
+  console.log({
+    "In isValidVariantPicker": true,
+  });
+
   // check 1 : if none of the fs_cand in the vpc are visually present, return null
   // WHY NOT ENFORCE THE VISIBILITY OF ALL THE FS_CANDs ?
   // Sometimes, the secondary option axes are hidden by the theme if they have only one option value.
-  let visually_present_fs_cand = new Array();
-  visually_present_fs_cand = vp_candidate.option_wrappers.filter((fs_cand) => {
-    let isOptionWrapperVisible = false;
-    const style = getComputedStyle(fs_cand);
-    isOptionWrapperVisible =
-      style.display !== "none" &&
-      style.visibility !== "hidden" &&
-      parseFloat(style.opacity) > 0 &&
-      fs_cand.offsetParent !== null &&
-      fs_cand.getClientRects().length > 0;
 
-    return isOptionWrapperVisible;
-  });
+  // PRODUCTION :
+  // let visually_present_fs_cand = new Array();
+  // visually_present_fs_cand = vp_candidate.option_wrappers.filter((fs_cand) => {
+  //   let isOptionWrapperVisible = false;
+  //   const style = getComputedStyle(fs_cand);
+  //   isOptionWrapperVisible =
+  //     style.display !== "none" &&
+  //     style.visibility !== "hidden" &&
+  //     parseFloat(style.opacity) > 0 &&
+  //     fs_cand.offsetParent !== null &&
+  //     fs_cand.getClientRects().length > 0;
 
-  if (visually_present_fs_cand.length === 0) return null;
+  // TESTING :
+  const visually_present_fs_cand_indices = vp_candidate.option_wrappers.reduce(
+    (acc, fs_cand, index) => {
+      const style = getComputedStyle(fs_cand);
+
+      const isVisible =
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        parseFloat(style.opacity) > 0 &&
+        fs_cand.offsetParent !== null &&
+        fs_cand.getClientRects().length > 0;
+
+      if (isVisible) acc.push(index);
+      return acc;
+    },
+    []
+  );
+
+  //   return isOptionWrapperVisible;
+  // });
+
+  if (visually_present_fs_cand_indices.length === 0) return null;
 
   // check 2 : the visually present fs_cand set and optionAxes have a 1:1 mapping
 
@@ -609,23 +656,23 @@ function isValidVariantPicker(
     }
   );
   console.log({
-    ov_attributes_filtered_per_fsCand
+    ov_attributes_filtered_per_fsCand,
   });
 
   let selector_yielding_ova_perFsCand = [];
-  if(optionCount === 1){
-    let selectorYieldingOVAList = ov_attributes_filtered_per_fsCand[0].filter((ova) => {
-        let attributeSelector = `[${ova}="${CSS.escape(
-          optionValuesRack[0]
-        )}"]`;
+  if (optionCount === 1) {
+    let selectorYieldingOVAList = ov_attributes_filtered_per_fsCand[0].filter(
+      (ova) => {
+        let attributeSelector = `[${ova}="${CSS.escape(optionValuesRack[0])}"]`;
         let fs_cand = vp_candidate.option_wrappers[0];
         return fs_cand.querySelector(attributeSelector);
-      });
+      }
+    );
 
-    if(selectorYieldingOVAList.length > 0){
-      selector_yielding_ova_perFsCand.push(selectorYieldingOVAList)
+    if (selectorYieldingOVAList.length > 0) {
+      selector_yielding_ova_perFsCand.push(selectorYieldingOVAList);
       console.log({
-        selector_yielding_ova_perFsCand
+        selector_yielding_ova_perFsCand,
       });
       return true;
     } else {
@@ -633,14 +680,9 @@ function isValidVariantPicker(
     }
   }
 
-
   let fieldSetMap = new Array(optionCount).fill(-1);
-  let fs_candidates = visually_present_fs_cand; // we need to confirm 1:1 mapping only for the visually present fs_cands
-  for (
-    let fs_cand_index = 0;
-    fs_cand_index < fs_candidates.length;
-    fs_cand_index++
-  ) {
+  let fs_candidates = vp_candidate.option_wrappers; // we need to confirm 1:1 mapping only for the visually present fs_cands
+  for (let fs_cand_index of visually_present_fs_cand_indices) {
     for (
       let optionAxisIndex = 0;
       optionAxisIndex < optionValuesRack.length;
@@ -661,6 +703,10 @@ function isValidVariantPicker(
           fieldSetMap[fs_cand_index] = optionAxisIndex;
           selector_yielding_ova_perFsCand.push(selectorYieldingOVAList);
         } else {
+          console.log({
+            "isValidVariantPicker()": "1:1 mapping failed",
+            fs_cand : fs_candidates[fs_cand_index],
+          });
           return false;
         }
       }
@@ -670,7 +716,7 @@ function isValidVariantPicker(
   // return true;
   if (fieldSetMap.some((value) => value !== -1)) {
     console.log({
-      selector_yielding_ova_perFsCand
+      selector_yielding_ova_perFsCand,
     });
     return true;
   }

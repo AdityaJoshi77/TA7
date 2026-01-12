@@ -16,24 +16,11 @@ function findAnchorProductForm() {
   const productFormRegex = /product[-_]*.*[-_]*form/i;
 
   let anchorProductForm = null;
+
   const validNameIdElement = anchors.find((el) => {
-    anchorProductForm = el.closest("form");
-    if (!anchorProductForm) return false;
+    anchorProductForm = findClosestRegexMatchedAncestor(el, productFormRegex);
 
-    // the true product form holds the add to cart button,
-    // and therefore cannot be hidden
-    let isFormVisible = false;
-    const style = getComputedStyle(anchorProductForm);
-    isFormVisible =
-      style.display !== "none" &&
-      style.visibility !== "hidden" &&
-      parseFloat(style.opacity) > 0 &&
-      anchorProductForm.offsetParent !== null &&
-      anchorProductForm.getClientRects().length > 0;
-
-    return (
-      isFormVisible && formMatchesRegex(anchorProductForm, productFormRegex)
-    );
+    return Boolean(anchorProductForm);
   });
 
   if (validNameIdElement) {
@@ -50,15 +37,20 @@ function findAnchorProductForm() {
   return null;
 }
 
-function isElementVisible(el) {
-  const style = getComputedStyle(el);
-  return (
-    style.display !== "none" &&
-    style.visibility !== "hidden" &&
-    parseFloat(style.opacity) > 0 &&
-    el.offsetParent !== null &&
-    el.getClientRects().length > 0
-  );
+function findClosestRegexMatchedAncestor(el, productFormRegex) {
+  let current = el.parentElement;
+
+  while (current && current !== document.body) {
+    if (
+      isElementVisible(current) &&
+      formMatchesRegex(current, productFormRegex)
+    ) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+
+  return null;
 }
 
 // HELPER:
@@ -72,6 +64,17 @@ function formMatchesRegex(form, productFormRegex) {
 
     return productFormRegex.test(attr.value);
   });
+}
+
+function isElementVisible(el) {
+  const style = getComputedStyle(el);
+  return (
+    style.display !== "none" &&
+    style.visibility !== "hidden" &&
+    parseFloat(style.opacity) > 0 &&
+    el.offsetParent !== null &&
+    el.getClientRects().length > 0
+  );
 }
 
 // HELPER:
@@ -210,7 +213,7 @@ async function getProductData(ta7_debug = false) {
 
 function getVariantPickersHavingValidStructure(
   variantPickerCandidates,
-  optionCountInJSON // getVariantPickersHavingValidStructure
+  optionCount // getVariantPickersHavingValidStructure
 ) {
   const potentialVariantPickers = variantPickerCandidates.reduce(
     (acc, vp_candidate) => {
@@ -220,12 +223,13 @@ function getVariantPickersHavingValidStructure(
       // CURRENT LOGIC :
       // If the vp_candidate.children !== optionCountInJSON.length
       // check for vp_candidate.descendencts.length === optionCountInJSON.length.
+      // if the descendent check also failed, rely on the heuristic : children in vpc === optionCountInJSON
 
       // PRODUCTION :
       let option_wrappers = Array.from(vp_candidate.children).filter((child) =>
         variantPickerCandidates.includes(child)
       );
-      if (option_wrappers.length === optionCountInJSON.length) {
+      if (option_wrappers.length === optionCount) {
         acc.push({ vp_candidate, option_wrappers });
 
         // debug log
@@ -233,31 +237,39 @@ function getVariantPickersHavingValidStructure(
           structure_validity_confimation: "Sturcture Validiy at Children Level",
           vp_candidate,
         });
-      } else if (
-        Array.from(vp_candidate.children).length === optionCountInJSON.length
-      ) {
+
+        return acc;
+      }
+
+      option_wrappers = Array.from(vp_candidate.querySelectorAll("*")).filter(
+        (child) => variantPickerCandidates.includes(child)
+      );
+
+      if (option_wrappers.length === optionCount) {
+        acc.push({ vp_candidate, option_wrappers });
+
         // debug log
         console.log({
-          structure_validity_confimation: "Sturcture Validiy assumed since optionCount === vpc.children",
+          structure_validity_confimation:
+            "Sturcture Validiy at Descendents Level",
           vp_candidate,
         });
-        acc.push({ vp_candidate, option_wrappers : Array.from(vp_candidate.children) });
-      } else {
-        // TESTING :
-        option_wrappers = Array.from(vp_candidate.querySelectorAll("*")).filter(
-          (child) => variantPickerCandidates.includes(child)
-        );
 
-        if (option_wrappers.length === optionCountInJSON.length) {
-          acc.push({ vp_candidate, option_wrappers });
+        return acc;
+      } else if (
+        Array.from(vp_candidate.children).length === optionCount
+      ) {
+        acc.push({
+          vp_candidate,
+          option_wrappers: Array.from(vp_candidate.children),
+        });
 
-          // debug log
-          console.log({
-            structure_validity_confimation:
-              "Sturcture Validiy at Descendents Level",
-            vp_candidate,
-          });
-        }
+        // debug log
+        console.log({
+          structure_validity_confimation:
+            "Sturcture Validiy assumed since optionCount === vpc.children",
+          vp_candidate,
+        });
       }
 
       return acc;
@@ -520,8 +532,6 @@ function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
   return finalSelectorSet;
 }
 
-
-
 // HELPER:
 // Checks the selectors' validity :
 function extractFinalSelectors(selector_set) {
@@ -540,7 +550,9 @@ function extractFinalSelectors(selector_set) {
     // Slow path: ambiguity → test behaviorally
     for (const [ov_attribute, selectors] of entries) {
       let isSelectorVisible = false;
-      isSelectorVisible = selectors.some(selector => isElementVisible(selector))
+      isSelectorVisible = selectors.some((selector) =>
+        isElementVisible(selector)
+      );
 
       if (isSelectorVisible) {
         extractedSelectorData.push({
@@ -813,7 +825,7 @@ async function test() {
 
   let validStructuredVPC = getVariantPickersHavingValidStructure(
     regexMatchingVPC,
-    optionNames
+    optionNames.length
   );
 
   if (!validStructuredVPC.length) {

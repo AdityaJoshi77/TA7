@@ -166,6 +166,11 @@ function getRegexMatchingVariantPickerCandidates(parentNode, productJSON) {
 
   const matchedElements = Array.from(parentNode.querySelectorAll("*")).filter(
     (el) => {
+
+      // THE MOST OBVIOUS SIGN OF A VARIANT PICKER IN CASE OF RADIO BUTTONS: 
+      if(el.tagName.toLowerCase() === "fieldset")
+        return true;
+
       // reject extremely narrow candidates
       if (
         ["input", "select", "label", "legend", "span", "li", "a"].includes(
@@ -173,7 +178,7 @@ function getRegexMatchingVariantPickerCandidates(parentNode, productJSON) {
         )
       )
         return false;
-
+      
       // check tag name
       if (regex.test(el.tagName.toLowerCase())) return true;
 
@@ -207,9 +212,8 @@ async function getProductData(ta7_debug = false) {
 }
 
 // HELPER:
-// Look for the presence of nodes whose textContent matches with the optionNames
-// productJSON. a mainContainerCandidate which has all the matching nodes is eligible to the'
-// MVP.
+// Extract from the regexMatchingVPC list, those candidates which have as many other regexMatching VPCs as their children / descendant as the option Count in the product
+// or have as many children as option count in the product.
 
 function getVariantPickersHavingValidStructure(
   variantPickerCandidates,
@@ -256,9 +260,7 @@ function getVariantPickersHavingValidStructure(
         });
 
         return acc;
-      } else if (
-        Array.from(vp_candidate.children).length === optionCount
-      ) {
+      } else if (Array.from(vp_candidate.children).length === optionCount) {
         acc.push({
           vp_candidate,
           option_wrappers: Array.from(vp_candidate.children),
@@ -739,6 +741,10 @@ function isValidVariantPicker(
   console.log({
     "inValidVariantPicker()":
       "No fs_cand is 1:1 mapped with option Axes in the current VPC",
+    vp_candidate,
+    visually_present_fs_cand_indices,
+    selector_yielding_ova_perFsCand,
+    fieldSetMap,
   });
 
   return null;
@@ -918,3 +924,4 @@ await test();
 // [REQUIRED] : If you get two selector set such that both of them are visible, which would we select.
 //      eg : https://evercraftatelier.com/products/wifey-est-couple-personalized-custom-unisex-sweatshirt-with-design-on-sleeve-gift-for-husband-wife-anniversary?variant=52663929012587
 // [OPTIONAL] : 3rd Party Variant-pickers
+// [NOTE] : sometimes, the option_wrappers are encoded with option names in ova. look for that

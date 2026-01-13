@@ -166,10 +166,8 @@ function getRegexMatchingVariantPickerCandidates(parentNode, productJSON) {
 
   const matchedElements = Array.from(parentNode.querySelectorAll("*")).filter(
     (el) => {
-
-      // THE MOST OBVIOUS SIGN OF A VARIANT PICKER IN CASE OF RADIO BUTTONS: 
-      if(el.tagName.toLowerCase() === "fieldset")
-        return true;
+      // THE MOST OBVIOUS SIGN OF A VARIANT PICKER IN CASE OF RADIO BUTTONS:
+      if (el.tagName.toLowerCase() === "fieldset") return true;
 
       // reject extremely narrow candidates
       if (
@@ -178,7 +176,7 @@ function getRegexMatchingVariantPickerCandidates(parentNode, productJSON) {
         )
       )
         return false;
-      
+
       // check tag name
       if (regex.test(el.tagName.toLowerCase())) return true;
 
@@ -320,7 +318,7 @@ function getCorrectVariantPickerWithSelectors(
     matchedAttributes,
   };
 
-  // testing optionValuesAssortment :
+  // verifying option extraction key generation
   let optionExtKeyGenSuccess = false;
   if (optionCount > 1) {
     optionExtKeyGenSuccess =
@@ -336,18 +334,17 @@ function getCorrectVariantPickerWithSelectors(
       optionExtractionKeys,
     });
 
-    // QUESTION TO ADDRESS : How would you know that which selector is correct ?
-    // The parent wrapper of the correct selector set will be visually present.
-
-    // call the function to extract selectors per option Axis per ov_attribute if optionCount > 1.
+    // call the function to extract selectors per option Axis per ov_attribute
     finalSelectorResult.selector_set =
-      // normalizeSelectorSetForMultiOptionCount_filtered(optionExtractionKeys);
       normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
         optionExtractionKeys,
         optionCount
       );
 
-    //
+    // at this point, if you get multiple set of selectors, they are
+    // bound to be encoded by different ov_attribute.
+
+    // get the final set of selectors from the selector_set
     finalSelectorResult.selector_data = extractFinalSelectors(
       finalSelectorResult.selector_set
     );
@@ -397,8 +394,16 @@ function generateOptionExtractionKeys(
         vp_validation_data.visually_present_fs_cand_indices;
       for (let fs_cand_index of visually_present_fieldsets) {
         let fs_cand = vp_candidate.option_wrappers[fs_cand_index];
+
         let matching_ova_inFsCand =
           vp_validation_data.selector_yielding_ova_perFsCand[fs_cand_index];
+
+        console.log({
+          Control_Function: "generateOptionExtractionKeys",
+          fs_cand_index,
+          matching_ova_inFsCand,
+        });
+
         for (let ov_attribute of matching_ova_inFsCand) {
           const attributeSelector = `[${ov_attribute}="${CSS.escape(
             optionValueRack[optionValueIndex]
@@ -538,28 +543,49 @@ function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
 // Checks the selectors' validity :
 function extractFinalSelectors(selector_set) {
   let extractedSelectorData = [];
-
+  let invisibleSelectorSet = [];
   for (const optionAxisObject of selector_set) {
     const entries = Object.entries(optionAxisObject);
 
-    // Fast path: only one candidate → accept without testing
+    // phase 1: only one candidate → accept without testing
     if (entries.length === 1) {
       const [[attribute_name, selectors]] = entries;
       extractedSelectorData.push({ attribute_name, selectors });
       continue;
     }
 
-    // Slow path: ambiguity → test behaviorally
+    // phase 2: multiple candidates → test visibility
+    let isSelectorSetVisible = false;
+    let finalSelectorSet = null;
     for (const [ov_attribute, selectors] of entries) {
-      let isSelectorVisible = false;
-      isSelectorVisible = selectors.some((selector) =>
+      isSelectorSetVisible = selectors.some((selector) =>
         isElementVisible(selector)
       );
 
-      if (isSelectorVisible) {
-        extractedSelectorData.push({
+      if (isSelectorSetVisible) {
+        finalSelectorSet = {
           attribute_name: ov_attribute,
           selectors,
+        };
+        break;
+      } else {
+        invisibleSelectorSet.push({ ov_attribute, selectors });
+      }
+    }
+
+    // phase 3 : all candidates hidden ? -> go for the best one as per heuristic
+    if (finalSelectorSet) {
+      extractedSelectorData.push(finalSelectorSet);
+    } else {
+      finalSelectorSet = returnBestSelectorSet(invisibleSelectorSet);
+      if (finalSelectorSet) {
+        extractedSelectorData.push(finalSelectorSet);
+      } else {
+        console.warn({
+          Control_Function: "extractFinalSelectors()",
+          Error:
+            "All selector sets for optionAxis are hidden, could not get best one",
+          optionAxisObject,
         });
         break;
       }
@@ -567,6 +593,57 @@ function extractFinalSelectors(selector_set) {
   }
 
   return extractedSelectorData;
+}
+
+function returnBestSelectorSet(invisibleSelectorSet, optionAxisObject) {
+  let selectorPriorityList = [
+    ["input", "option"],
+    ["li", "a", "button"],
+    ["div", "label"],
+  ];
+
+  let selectorCandidatesList = invisibleSelectorSet.map(
+    (selectorSet, index) => {
+      return {
+        selectorRep: selectorSet.selectors[0].tagName.toLowerCase(),
+        inSelSetIndex: index,
+        selProListIndex: -1,
+      };
+    }
+  );
+
+  // get the priority level of each selector set.
+  for (let selectorCandidate of selectorCandidatesList) {
+    let selectorRep = selectorCandidate.selectorRep;
+    for (let pl_index in selectorPriorityList) {
+      let priority_list = selectorPriorityList[pl_index];
+      if (priority_list.includes(selectorRep)) {
+        selectorCandidate.selProListIndex = pl_index;
+        break;
+      }
+    }
+  }
+
+  let bestSelectorSet = selectorCandidatesList.reduce((max, curr) =>
+    max.selProListIndex > curr.selProListIndex ? curr : max
+  );
+
+  // SEND WARNING MESSAGE:
+  console.warn({
+    Control_Function: "returnBestSelectorSet()",
+    Error:
+      "fs_cand for option axis had multiple selector set, All hidden, returning the best one",
+    optionAxisObject,
+    invisibleSelectorSet,
+    selectorCandidatesList,
+    bestSelectorSet,
+  });
+
+  if(bestSelectorSet){
+    return invisibleSelectorSet[bestSelectorSet.inSelSetIndex];
+  }
+
+  return null;
 }
 
 // HELPER:
@@ -625,7 +702,7 @@ function isValidVariantPicker(
     "In isValidVariantPicker": true,
   });
 
-  // check 1 : if none of the fs_cand in the vpc are visually present, return null
+  // CHECK 1 : if none of the fs_cand in the vpc are visually present, return null
   // WHY NOT ENFORCE THE VISIBILITY OF ALL THE FS_CANDs ?
   // Sometimes, the secondary option axes are hidden by the theme if they have only one option value.
 
@@ -649,7 +726,7 @@ function isValidVariantPicker(
 
   if (visually_present_fs_cand_indices.length === 0) return null;
 
-  // check 2 : the visually present fs_cand set and optionAxes have a 1:1 mapping
+  // CHECK 2 : the visually present fs_cand set and optionAxes have a 1:1 mapping
 
   // ov_attribute filteration :
   // check which ov_attribute are found in each fs_cand (even if visually hidden), remove needless combos
@@ -664,6 +741,24 @@ function isValidVariantPicker(
   console.log({
     ov_attributes_filtered_per_fsCand,
   });
+
+  // If none of the ova in the OPTION_VALUE_ATTRIBUTES are found in the fs_cand,
+  // The logic hereafter won't be able to get 1:1 mapping and generate required
+  // vp_validation_data ;
+  // INFERENCE : either the vp_candidate is invalid,
+  // or our OPTION_VALUE_ATTRIBUTES is not suffecient.
+  if (
+    ov_attributes_filtered_per_fsCand.some((ova_array) => !ova_array.length)
+  ) {
+    console.error({
+      Control_Function: "isValidVariantPicker()",
+      Error:
+        "Invalid vp_candidate or insufficient OVA list, cannot proceed further",
+      ov_attributes_filtered_per_fsCand,
+      vp_candidate,
+    });
+    return null;
+  }
 
   let selector_yielding_ova_perFsCand = [];
 

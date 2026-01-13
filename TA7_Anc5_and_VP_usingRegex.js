@@ -23,18 +23,21 @@ function findAnchorProductForm() {
     return Boolean(anchorProductForm);
   });
 
-  if (validNameIdElement) {
-    return {
-      validNameIdElement,
-      anchorProductForm,
-    };
-  }
+  return {
+    validNameIdElement,
+    anchorProductForm,
+    nameIdAnchors: anchors,
+  };
 
-  console.log({
-    status: "Failed to find variantIdAnchorProductForm",
-  });
+  // if (validNameIdElement) {
+  //   return {
+  //     validNameIdElement,
+  //     anchorProductForm,
+  //     nameIdAnchors: anchors,
+  //   };
+  // }
 
-  return null;
+  // return null;
 }
 
 function findClosestRegexMatchedAncestor(el, productFormRegex) {
@@ -179,6 +182,10 @@ function getRegexMatchingVariantPickerCandidates(parentNode, productJSON) {
 
       // check tag name
       if (regex.test(el.tagName.toLowerCase())) return true;
+
+      // check id
+      if (typeof el.id === "string" && regex.test(el.id.toLowerCase()))
+        return true;
 
       // check class names
       return Array.from(el.classList).some((cls) => regex.test(cls));
@@ -639,7 +646,7 @@ function returnBestSelectorSet(invisibleSelectorSet, optionAxisObject) {
     bestSelectorSet,
   });
 
-  if(bestSelectorSet){
+  if (bestSelectorSet) {
     return invisibleSelectorSet[bestSelectorSet.inSelSetIndex];
   }
 
@@ -862,28 +869,34 @@ async function test() {
 
   const anchorProductFormData = findAnchorProductForm();
 
-  // Failure to find the anchorProductForm
-  // INFERENCE: Our fundamental assumptions are violated by the theme. (Absolute Failure)
-  if (!anchorProductFormData) {
-    const statusObject = {
-      status: "[TA7] Failed",
-      cause: "variantID anchorForm not found",
-    };
-    console.log(statusObject);
-    return targetData;
-  }
-
   const anchorProductForm = anchorProductFormData.anchorProductForm;
   targetData.E__anchorData = {
     nameIdElement: anchorProductFormData.validNameIdElement,
     anchorProductForm,
+    nameIdAnchors: anchorProductFormData.nameIdAnchors,
   };
+
+  // Failure to find the anchorProductForm
+  // INFERENCE: Our fundamental assumptions are violated by the theme. (Absolute Failure)
+  if (!anchorProductFormData.anchorProductForm) {
+    console.error({
+      status: "[TA7] Failed",
+      cause: "variantID anchorForm not found",
+    });
+    return targetData;
+  }
 
   // GET PRODUCT DATA
   const product = await getProductData();
   const optionNames = product.options.map((option) =>
     option.name.toLowerCase()
   );
+
+  // confirming product data :
+  console.log({
+    optionNames,
+    optionCount: optionNames.length,
+  });
 
   // Find a stable parent,
   // and look for regex-matching variant picker candidates in that parent

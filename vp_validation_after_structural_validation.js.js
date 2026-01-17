@@ -744,9 +744,8 @@ function isValidVariantPicker(
     vp_candidate,
   });
 
-  // If 
   if (
-    ov_attributes_filtered_per_fsCand.every((ova_array) => !ova_array.length)
+    ov_attributes_filtered_per_fsCand.some((ova_array) => !ova_array.length)
   ) {
     console.warn({
       Control_Function: "isValidVariantPicker()",

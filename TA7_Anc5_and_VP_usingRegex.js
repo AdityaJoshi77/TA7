@@ -524,7 +524,12 @@ function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
 // Checks the selectors' validity :
 function extractFinalSelectors(selector_set) {
   let extractedSelectorData = [];
-  let invisibleSelectorSet = [];
+
+  console.log({
+    Control_Function: "In extractFinalSelectors()",
+    selector_set,
+  });
+
   for (const optionAxisObject of selector_set) {
     const entries = Object.entries(optionAxisObject);
 
@@ -538,51 +543,69 @@ function extractFinalSelectors(selector_set) {
     // phase 2: multiple candidates → test visibility
     let isSelectorSetVisible = false;
     let finalSelectorSet = null;
+    let visibleSelectorSet = [];
+    let invisibleSelectorSet = [];
+
     for (const [ov_attribute, selectors] of entries) {
       isSelectorSetVisible = selectors.some((selector) =>
         isElementVisible(selector)
       );
 
       if (isSelectorSetVisible) {
-        finalSelectorSet = {
-          attribute_name: ov_attribute,
-          selectors,
-        };
-        break;
+        visibleSelectorSet.push({ ov_attribute, selectors });
       } else {
         invisibleSelectorSet.push({ ov_attribute, selectors });
       }
     }
 
     // phase 3 : all candidates hidden ? -> go for the best one as per heuristic
-    if (finalSelectorSet) {
-      extractedSelectorData.push(finalSelectorSet);
+
+    // if (finalSelectorSet) {
+    //   extractedSelectorData.push(finalSelectorSet);
+    // }
+    console.log({
+      visibleSelectorSet,
+      invisibleSelectorSet
+    });
+
+    if (visibleSelectorSet.length) {
+      if (visibleSelectorSet.length === 1) {
+        finalSelectorSet = visibleSelectorSet;
+      } else {
+        finalSelectorSet = returnBestSelectorSet(visibleSelectorSet);
+        console.log({
+          Best_Selector_Set : finalSelectorSet
+        });
+      }
     } else {
       finalSelectorSet = returnBestSelectorSet(invisibleSelectorSet);
-      if (finalSelectorSet) {
-        extractedSelectorData.push(finalSelectorSet);
-      } else {
-        console.warn({
-          Control_Function: "extractFinalSelectors()",
-          Error:
-            "All selector sets for optionAxis are hidden, could not get best one",
-          optionAxisObject,
-        });
-        break;
-      }
     }
+
+    if (!finalSelectorSet) {
+      console.warn({
+        Control_Function: "extractFinalSelectors()",
+        Status: "[Failure] : Could not extract selectors for the option axis",
+        optionAxisObject,
+      });
+      continue;
+    }
+
+    console.log({
+      finalSelectorSet
+    });
+
+    finalSelectorSet = {
+      attribute_name: finalSelectorSet[0].ov_attribute,
+      selectors: finalSelectorSet[0].selectors
+    };
+
+    extractedSelectorData.push(finalSelectorSet);
   }
 
   return extractedSelectorData;
 }
 
-function returnBestSelectorSet(invisibleSelectorSet, optionAxisObject) {
-  let selectorPriorityList = [
-    ["input", "option"],
-    ["button", "a", "li"],
-    ["div", "label"],
-  ];
-
+function returnBestSelectorSet(selectorSetArray) {
   let selectorPriorityList_flat = [
     "input",
     "option",
@@ -594,15 +617,13 @@ function returnBestSelectorSet(invisibleSelectorSet, optionAxisObject) {
   ];
   // Use a 1D array instead.
 
-  let selectorCandidatesList = invisibleSelectorSet.map(
-    (selectorSet, index) => {
-      return {
-        selectorRep: selectorSet.selectors[0].tagName.toLowerCase(),
-        inSelSetIndex: index,
-        selProListIndex: -1,
-      };
-    }
-  );
+  let selectorCandidatesList = selectorSetArray.map((selectorSet, index) => {
+    return {
+      selectorRep: selectorSet.selectors[0].tagName.toLowerCase(),
+      inSelSetIndex: index,
+      selProListIndex: -1,
+    };
+  });
 
   // get the priority level of each selector set.
   for (let selectorCandidate of selectorCandidatesList) {
@@ -623,14 +644,13 @@ function returnBestSelectorSet(invisibleSelectorSet, optionAxisObject) {
     Control_Function: "returnBestSelectorSet()",
     Error:
       "fs_cand for option axis had multiple selector set, All hidden, returning the best one",
-    optionAxisObject,
-    invisibleSelectorSet,
+    selectorSetArray,
     selectorCandidatesList,
     bestSelectorSet,
   });
 
   if (bestSelectorSet) {
-    return invisibleSelectorSet[bestSelectorSet.inSelSetIndex];
+    return selectorSetArray[bestSelectorSet.inSelSetIndex];
   }
 
   return null;
@@ -806,7 +826,6 @@ function isValidVariantPicker(
       let selectorYieldingOVAList =
         ov_attributes_filtered_per_fsCand[fs_cand_index];
 
-
       selectorYieldingOVAList = selectorYieldingOVAList.filter((ova) => {
         let attributeSelector = `[${ova}="${CSS.escape(
           optionValuesRack[optionAxisIndex]
@@ -824,7 +843,7 @@ function isValidVariantPicker(
           console.log({
             "isValidVariantPicker()": "1:1 mapping failed",
             fs_cand: fs_candidates[fs_cand_index],
-            vp_candidate
+            vp_candidate,
           });
           return null;
         }

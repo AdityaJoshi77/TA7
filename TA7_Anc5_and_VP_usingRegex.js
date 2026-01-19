@@ -548,7 +548,8 @@ function extractFinalSelectors(selector_set) {
 
     for (const [ov_attribute, selectors] of entries) {
       isSelectorSetVisible = selectors.some((selector) =>
-        isElementVisible(selector)
+        // isElementVisible(selector) // should we look at the visibility of the selector, 
+        isElementVisible(selector.parentElement) // or at the visibility of the selector's immediate parent ? , 
       );
 
       if (isSelectorSetVisible) {
@@ -570,7 +571,7 @@ function extractFinalSelectors(selector_set) {
 
     if (visibleSelectorSet.length) {
       if (visibleSelectorSet.length === 1) {
-        finalSelectorSet = visibleSelectorSet;
+        finalSelectorSet = visibleSelectorSet[0];
       } else {
         finalSelectorSet = returnBestSelectorSet(visibleSelectorSet);
         console.log({
@@ -595,8 +596,8 @@ function extractFinalSelectors(selector_set) {
     });
 
     finalSelectorSet = {
-      attribute_name: finalSelectorSet[0].ov_attribute,
-      selectors: finalSelectorSet[0].selectors
+      attribute_name: finalSelectorSet.ov_attribute,
+      selectors: finalSelectorSet.selectors
     };
 
     extractedSelectorData.push(finalSelectorSet);
@@ -894,7 +895,7 @@ function isValidVariantPicker(
   // we will still miss it.
 }
 
-async function test() {
+async function test(getFullData = false) {
   let targetData = {
     A__finalVariantPicker: null, //finalVariantPickerTest,
     B__validStructureVPC: null, //validStructuredVPC,
@@ -1083,9 +1084,6 @@ async function test() {
     );
 
     if (finalSelectorResult) {
-      console.log({
-        Ho_Gaya_Kya: "Yayayayayayayayyayyayyaya",
-      });
       variantPicker.selectors = finalSelectorResult.selector_data;
       variantPicker.selectorMetaData = {
         dataValuesMatched: finalSelectorResult.dataValuesMatched,
@@ -1126,10 +1124,18 @@ async function test() {
   });
 
   if (targetData.A__finalVariantPicker) {
-    return {
+    let successObject = {
       "[TA7 VERDICT]": "Success",
-      Variant_Picker: targetData.A__finalVariantPicker,
+      // Variant_Picker: targetData.A__finalVariantPicker,
     };
+
+    if( !getFullData ){
+      successObject.Variant_Picker = targetData.A__finalVariantPicker;
+    } else {
+      successObject.Full_Data = targetData;
+    }
+
+    return successObject;
   }
 
   return {
@@ -1140,22 +1146,8 @@ async function test() {
 
 await test();
 
-// 1. [DONE] : place the selectors in their corresponding option-wrappers,
-// 2. [DONE] : Filter out the correct selectors if there are strays in the selectors list.
 // 3. Also, instead of option values, variantIds are used in the data-* values of the selectors. How would you tackle that issue ? https://innovadiscgolfcanada.ca/products/wombat3-proto-glow-champion
-// 4. 3rd Party Variant Pickers
 
-// CHECK THIS FIRST : https://evercraftatelier.com/products/wifey-est-couple-personalized-custom-unisex-sweatshirt-with-design-on-sleeve-gift-for-husband-wife-anniversary?variant=52663926522219
-// our variant picker regex is failing
-
-// THEN CHECK THIS : https://truekit.eu/products/true-kit-discovery
-// here our logic of vpc as fieldsets and direct children of vpc is failing.
-// [RESOLVED] :  Now checking all the descendants of the vp_candidate instead on only immediate children.
-
-// [DONE] : Optimization in isVariantPickerValid() (Very important)
-// [REQUIRED] : Enhance variant picker regex
-// [REQUIRED] : Mutation-Observer requirement.
-// [REQUIRED] : If you get two selector set such that both of them are visible, which would we select.
-//      eg : https://evercraftatelier.com/products/wifey-est-couple-personalized-custom-unisex-sweatshirt-with-design-on-sleeve-gift-for-husband-wife-anniversary?variant=52663929012587
 // [OPTIONAL] : 3rd Party Variant-pickers
-// [NOTE] : sometimes, the option_wrappers are encoded with option names in ova. look for that
+// [OPTIMIZATION STRATEGY] : Should we look for fs_cand directly instead of variant pickers ? 
+//    We might save ourselves from structural validation.

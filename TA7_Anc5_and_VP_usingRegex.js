@@ -160,18 +160,19 @@ function getRegexMatchingVariantPickerCandidates(parentNode, productJSON) {
   );
 
   const matchedElements = Array.from(
-    parentNode.querySelectorAll("div, fieldset, form, section, ul")
+    // parentNode.querySelectorAll("div, fieldset, form, section, ul")
+    parentNode.querySelectorAll("*")
   ).filter((el) => {
     // THE MOST OBVIOUS SIGN OF A VARIANT PICKER IN CASE OF RADIO BUTTONS:
     if (el.tagName.toLowerCase() === "fieldset") return true;
 
     // reject extremely narrow candidates
-    // if (
-    //   ["input", "select", "label", "legend", "span", "li", "a"].includes(
-    //     el.tagName.toLowerCase()
-    //   )
-    // )
-    //   return false;
+    if (
+      ["input", "select", "label", "legend", "span", "li", "a"].includes(
+        el.tagName.toLowerCase()
+      )
+    )
+      return false;
 
     // check tag name
     if (regex.test(el.tagName.toLowerCase())) return true;
@@ -759,6 +760,7 @@ function isValidVariantPicker(
       Control_Function: "isValidVariantPicker()",
       Error: "Invalid vp_candidate",
       vp_candidate,
+      ov_attributes_filtered_per_fsCand
     });
     return null;
   }
@@ -861,13 +863,13 @@ function isValidVariantPicker(
 
   // we are checking for the count of those fs_cand that couldn't be
   // 1:1 mapped to any option axis.
-  let unMappedFscandCount = fieldSetMap.filter((v) => v === -1).length;
+  let mappedFscandCount = fieldSetMap.filter((v) => v !== -1).length;
 
   // At this moment, it is implicit that the optionCount was > 1
   // So if despite optionCount > 1, we have only a single 1:1 mapping
   // It can mean only one thing :
   // We have an option_wrapper disguised as the variant picker.
-  if (unMappedFscandCount === 0) return vp_validation_data;
+  if (mappedFscandCount > 1) return vp_validation_data;
 
   // if the vp_candidate is a disguised option_wrapper,
   // we attach a disguisedOptionWrapper Boolean flag to the vp_validation_data
@@ -1051,6 +1053,9 @@ async function test(getFullData = false) {
 
   // if you have disguised option wrappers, assume candidateObject.parent as the new variant picker wrapper
   if (disguisedOptionWrappersDetected.length) {
+    if( !supplied_ova_array.length ){
+      supplied_ova_array = Array.from(supplied_ova_array);
+    }
     let variantPicker = {
       vp_candidate: candidateObject.parent,
       option_wrappers: disguisedOptionWrappersDetected,
@@ -1139,6 +1144,11 @@ async function test(getFullData = false) {
 }
 
 await test();
+
+// [BUG ALERT] : Currently, isValidVariantPicker() would give strange results if more than one, but not all 
+// option_wrappers in the vp_candidate map 1:1 with the option axis.
+
+// [BUT ALERT] : Sometimes, you may not find as many disguised option_wrappers as optionCount. (Easier to handle).
 
 // 3. Also, instead of option values, variantIds are used in the data-* values of the selectors. How would you tackle that issue ? https://innovadiscgolfcanada.ca/products/wombat3-proto-glow-champion
 

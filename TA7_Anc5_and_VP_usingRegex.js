@@ -1011,7 +1011,7 @@ async function test(getFullData = false) {
     );
 
     // no 1:1 mapping in item : DISCARD and continue;
-    if (!vp_validation_data) continue; // possible optimization : remove unmatched ovas from
+    if (!vp_validation_data) continue;
 
     // option wrapper disguised as variant picker:
     if (vp_validation_data.disguisedOptionWrapper) {

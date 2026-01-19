@@ -28,16 +28,6 @@ function findAnchorProductForm() {
     anchorProductForm,
     nameIdAnchors: anchors,
   };
-
-  // if (validNameIdElement) {
-  //   return {
-  //     validNameIdElement,
-  //     anchorProductForm,
-  //     nameIdAnchors: anchors,
-  //   };
-  // }
-
-  // return null;
 }
 
 function findClosestRegexMatchedAncestor(el, productFormRegex) {
@@ -69,6 +59,8 @@ function formMatchesRegex(form, productFormRegex) {
   });
 }
 
+// HELPER :
+// To check the visibilty of the element in question.
 function isElementVisible(el) {
   const style = getComputedStyle(el);
   return (
@@ -93,7 +85,7 @@ function getParentNodeForVPCSearch(node, recall = false) {
     current = node.parentElement;
     candidate = current;
 
-    maxDepth = 4;
+    let maxDepth = 4;
     let depth = 0;
 
     while (current && current !== document.body && depth < maxDepth) {
@@ -114,7 +106,7 @@ function getParentNodeForVPCSearch(node, recall = false) {
 }
 
 // HELPER:
-// we find the element whose tagName, or one of the classes
+// To find the element whose tagName, or one of the classes
 // matches with phrases like variant-picker, option_selectors, etc.
 // most theme would resort to this kind of nomenclature.
 function getRegexMatchingVariantPickerCandidates(parentNode, productJSON) {
@@ -167,30 +159,30 @@ function getRegexMatchingVariantPickerCandidates(parentNode, productJSON) {
     "i"
   );
 
-  const matchedElements = Array.from(parentNode.querySelectorAll("*")).filter(
-    (el) => {
-      // THE MOST OBVIOUS SIGN OF A VARIANT PICKER IN CASE OF RADIO BUTTONS:
-      if (el.tagName.toLowerCase() === "fieldset") return true;
+  const matchedElements = Array.from(
+    parentNode.querySelectorAll("div, fieldset, form, section, ul")
+  ).filter((el) => {
+    // THE MOST OBVIOUS SIGN OF A VARIANT PICKER IN CASE OF RADIO BUTTONS:
+    if (el.tagName.toLowerCase() === "fieldset") return true;
 
-      // reject extremely narrow candidates
-      if (
-        ["input", "select", "label", "legend", "span", "li", "a"].includes(
-          el.tagName.toLowerCase()
-        )
-      )
-        return false;
+    // reject extremely narrow candidates
+    // if (
+    //   ["input", "select", "label", "legend", "span", "li", "a"].includes(
+    //     el.tagName.toLowerCase()
+    //   )
+    // )
+    //   return false;
 
-      // check tag name
-      if (regex.test(el.tagName.toLowerCase())) return true;
+    // check tag name
+    if (regex.test(el.tagName.toLowerCase())) return true;
 
-      // check id
-      if (typeof el.id === "string" && regex.test(el.id.toLowerCase()))
-        return true;
+    // check id
+    if (typeof el.id === "string" && regex.test(el.id.toLowerCase()))
+      return true;
 
-      // check class names
-      return Array.from(el.classList).some((cls) => regex.test(cls));
-    }
-  );
+    // check class names
+    return Array.from(el.classList).some((cls) => regex.test(cls));
+  });
 
   if (matchedElements.length) return matchedElements;
 
@@ -547,9 +539,10 @@ function extractFinalSelectors(selector_set) {
     let invisibleSelectorSet = [];
 
     for (const [ov_attribute, selectors] of entries) {
-      isSelectorSetVisible = selectors.some((selector) =>
-        // isElementVisible(selector) // should we look at the visibility of the selector, 
-        isElementVisible(selector.parentElement) // or at the visibility of the selector's immediate parent ? , 
+      isSelectorSetVisible = selectors.some(
+        (selector) =>
+          // isElementVisible(selector) // should we look at the visibility of the selector,
+          isElementVisible(selector.parentElement) // or at the visibility of the selector's immediate parent ? ,
       );
 
       if (isSelectorSetVisible) {
@@ -566,7 +559,7 @@ function extractFinalSelectors(selector_set) {
     // }
     console.log({
       visibleSelectorSet,
-      invisibleSelectorSet
+      invisibleSelectorSet,
     });
 
     if (visibleSelectorSet.length) {
@@ -575,7 +568,7 @@ function extractFinalSelectors(selector_set) {
       } else {
         finalSelectorSet = returnBestSelectorSet(visibleSelectorSet);
         console.log({
-          Best_Selector_Set : finalSelectorSet
+          Best_Selector_Set: finalSelectorSet,
         });
       }
     } else {
@@ -592,12 +585,12 @@ function extractFinalSelectors(selector_set) {
     }
 
     console.log({
-      finalSelectorSet
+      finalSelectorSet,
     });
 
     finalSelectorSet = {
       attribute_name: finalSelectorSet.ov_attribute,
-      selectors: finalSelectorSet.selectors
+      selectors: finalSelectorSet.selectors,
     };
 
     extractedSelectorData.push(finalSelectorSet);
@@ -794,13 +787,14 @@ function isValidVariantPicker(
         fieldSet: vp_candidate.option_wrappers[0],
       };
     } else {
-      return false;
+      return null;
     }
   }
 
   // IF optionCount > 1
   // Logic Change : we are now checking for 1:1 mapping for all the fs_cands
-  // why : to ferret out a fs_cand disguised as vp_candidate
+  // why : to ferret out a fs_cand disguised as vp_candidate, in a disguised option wrapper, 
+  // not all the option_wrappers will map 1:1 with the option axes.
 
   let fieldSetMap = new Array(optionCount).fill(-1);
   let fs_candidates = vp_candidate.option_wrappers;
@@ -877,7 +871,7 @@ function isValidVariantPicker(
 
   // if the vp_candidate is a disguised option_wrapper,
   // we attach a disguisedOptionWrapper Boolean flag to the vp_validation_data
-  // to let the getCorrectVariantPickerWithSelectors() / test() function adjust accordingly.
+  // to let the test() function adjust accordingly.
   vp_validation_data.disguisedOptionWrapper = true;
   vp_validation_data.matchingOptionAxisIndex = fieldSetMap.find(
     (value) => value > -1
@@ -1129,7 +1123,7 @@ async function test(getFullData = false) {
       // Variant_Picker: targetData.A__finalVariantPicker,
     };
 
-    if( !getFullData ){
+    if (!getFullData) {
       successObject.Variant_Picker = targetData.A__finalVariantPicker;
     } else {
       successObject.Full_Data = targetData;
@@ -1149,5 +1143,5 @@ await test();
 // 3. Also, instead of option values, variantIds are used in the data-* values of the selectors. How would you tackle that issue ? https://innovadiscgolfcanada.ca/products/wombat3-proto-glow-champion
 
 // [OPTIONAL] : 3rd Party Variant-pickers
-// [OPTIMIZATION STRATEGY] : Should we look for fs_cand directly instead of variant pickers ? 
+// [OPTIMIZATION STRATEGY] : Should we look for fs_cand directly instead of variant pickers ?
 //    We might save ourselves from structural validation.

@@ -1,4 +1,3 @@
-
 function findMVPRecursively(variantPickerHook, optionNamesInJSON) {
   if (!variantPickerHook) {
     console.log("Variant Picker Hook is undefined", variantPickerHook);
@@ -31,7 +30,6 @@ function findMVPRecursively(variantPickerHook, optionNamesInJSON) {
 
   return findMVPRecursively(newHook, optionNamesInJSON);
 }
-
 
 function findVariantPickerWithOptionLabels(
   mainContainerCandidate,
@@ -113,7 +111,6 @@ function findVariatPickersBasedOnOptionNamesInJSON(
   return variantPickerData;
 }
 
-
 function detectOptionValues(vp_candidate, sampleOptionValue) {
   const OPTION_VALUE_ATTRIBUTES = [
     // Tier 1 — high-confidence, canonical
@@ -168,7 +165,6 @@ function detectOptionValues(vp_candidate, sampleOptionValue) {
   // sampleOptionValue, not our variantPicker
 }
 
-
 function normalizeSelectorSetForMultiOptionCount(optionExtractionKeys) {
   let finalSelectorSet = optionExtractionKeys.map((optionExtKey) => {
     let ov_attribute_array = Array.from(optionExtKey.ov_attribute);
@@ -185,12 +181,50 @@ function normalizeSelectorSetForMultiOptionCount(optionExtractionKeys) {
       }
     }
 
-    if(selectorArrayPerOptionAxis.length > optionExtKey.optionAxis.values.length){
-      
+    if (
+      selectorArrayPerOptionAxis.length > optionExtKey.optionAxis.values.length
+    ) {
     }
 
     return Array.from(selectorArrayPerOptionAxis);
   });
 
   return finalSelectorSet;
+}
+
+function getSelectorUsingOVA() {
+  let OPTION_VALUE_ATTRIBUTES = [
+    // Tier 1 — high-confidence, canonical
+    "value",
+    "data-option-value",
+    "data-option-value-id",
+    "data-option-id",
+    "data-value",
+    "data-value-id",
+    "data-variant-id",
+    "data-variant",
+    "data-selected-value",
+
+    // Tier 2 — handles / normalized keys
+    "data-value-handle",
+    "data-option-handle",
+    "data-handle",
+    "data-option-key",
+    "data-key",
+
+    // Tier 3 — generic but meaningful
+    "data-option",
+    "data-option-index",
+    "data-index",
+    "data-name",
+    "data-current-value",
+
+    // Tier 4 — accessibility / framework-driven
+    "orig-value",
+    "aria-label",
+    "aria-valuetext",
+    // "name",
+  ];
+
+  
 }

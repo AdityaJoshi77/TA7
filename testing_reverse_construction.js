@@ -86,20 +86,15 @@ async function getSelectorUsingOVA() {
         let attributeSelector = `[${ova}="${CSS.escape(optionValue)}"]`;
         let selector = document.querySelectorAll(attributeSelector);
         if (selector.length) {
-          if (ova in selectorKey)
-            selectorKey[ova].push(
-              ...Array.from(selector).filter((el) =>
-                isElementVisible(el.parentElement)
-              )
-            );
-          else {
+          let sel_array = Array.from(selector).filter((el) =>
+            isElementVisible(el.parentElement)
+          );
+          if (ova in selectorKey) {
+            selectorKey[ova].push(...sel_array);
+          } else {
             temp_ova_set.add(ova);
             selectorKey[ova] = [];
-            selectorKey[ova].push(
-              ...Array.from(selector).filter((el) =>
-                isElementVisible(el.parentElement)
-              )
-            );
+            selectorKey[ova].push(...sel_array);
           }
         }
       });

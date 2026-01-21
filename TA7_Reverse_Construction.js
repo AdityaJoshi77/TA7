@@ -367,10 +367,10 @@ function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
 function extractFinalSelectors(selector_set) {
   let extractedSelectorData = [];
 
-  console.log({
-    Control_Function: "In extractFinalSelectors()",
-    selector_set,
-  });
+  // console.log({
+  //   Control_Function: "In extractFinalSelectors()",
+  //   selector_set,
+  // });
 
   for (const optionAxisObject of selector_set) {
     const entries = Object.entries(optionAxisObject);
@@ -403,23 +403,19 @@ function extractFinalSelectors(selector_set) {
     }
 
     // phase 3 : all candidates hidden ? -> go for the best one as per heuristic
-
-    // if (finalSelectorSet) {
-    //   extractedSelectorData.push(finalSelectorSet);
-    // }
-    console.log({
-      visibleSelectorSet,
-      invisibleSelectorSet,
-    });
+    // console.log({
+    //   visibleSelectorSet,
+    //   invisibleSelectorSet,
+    // });
 
     if (visibleSelectorSet.length) {
       if (visibleSelectorSet.length === 1) {
         finalSelectorSet = visibleSelectorSet[0];
       } else {
         finalSelectorSet = returnBestSelectorSet(visibleSelectorSet);
-        console.log({
-          Best_Selector_Set: finalSelectorSet,
-        });
+        // console.log({
+        //   Best_Selector_Set: finalSelectorSet,
+        // });
       }
     } else {
       finalSelectorSet = returnBestSelectorSet(invisibleSelectorSet);
@@ -434,9 +430,9 @@ function extractFinalSelectors(selector_set) {
       continue;
     }
 
-    console.log({
-      finalSelectorSet,
-    });
+    // console.log({
+    //   finalSelectorSet,
+    // });
 
     finalSelectorSet = {
       attribute_name: finalSelectorSet.ov_attribute,
@@ -600,9 +596,9 @@ function isValidVariantPicker(
 
     if (selectorYieldingOVAList.length > 0) {
       selector_yielding_ova_perFsCand.push(selectorYieldingOVAList);
-      console.log({
-        selector_yielding_ova_perFsCand,
-      });
+      // console.log({
+      //   selector_yielding_ova_perFsCand,
+      // });
       return {
         selector_yielding_ova_perFsCand,
         fieldSet: vp_candidate.option_wrappers[0],
@@ -743,8 +739,6 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
       return null;
     }
 
-    console.log({ interParents });
-
     // move one level up
     const tempParents = interParents
       .map((el) => el.parentElement)
@@ -759,7 +753,6 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
 
     // lowest common ancestor found
     if (LCA) {
-      console.log({ LCA, flagSelectors });
       variantPicker = LCA;
 
       let option_wrappers = null;
@@ -788,7 +781,7 @@ function createLeafNodeSelectorSets(
   reduced_ova_array,
   optionCount
 ) {
-  console.log({ rawSetectorKeys: selectorKeys, reduced_ova_array });
+  // console.log({ rawSetectorKeys: selectorKeys, reduced_ova_array });
   let variantPickerKeySets = [];
 
   reduced_ova_array.forEach((ova) => {
@@ -813,7 +806,7 @@ function createLeafNodeSelectorSets(
     variantPickerKeySets.push(variantPickerKey);
   });
 
-  console.log({ variantPickerKeySets });
+  // console.log({ variantPickerKeySets });
   return variantPickerKeySets;
 }
 
@@ -948,7 +941,7 @@ function getVariantPickersByRevCon(searchNode, product) {
     reduced_ova_array,
     optionCount
   );
-  console.log({ variantPickerKeySets });
+  // console.log({ variantPickerKeySets });
   let finalVariantPickerSet = variantPickerKeySets.map((set) =>
     createVariantPicker(set, optionCount)
   );
@@ -968,7 +961,7 @@ function getVariantPickersByRevCon(searchNode, product) {
     OPTION_VALUE_ATTRIBUTES: reduced_ova_array,
     variantPickerSet: finalVariantPickerSet,
     optionValueRack,
-    optionCount
+    optionCount,
   };
 }
 

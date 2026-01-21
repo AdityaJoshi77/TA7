@@ -51,6 +51,8 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
       return null;
     }
 
+    console.log({ interParents });
+
     // move one level up
     const tempParents = interParents
       .map((el) => el.parentElement)
@@ -76,8 +78,7 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
           return temp;
         });
       } else {
-        option_wrappers = [LCA],
-        variantPicker = LCA.parentElement
+        (option_wrappers = [LCA]), (variantPicker = LCA.parentElement);
       }
 
       return {
@@ -90,7 +91,11 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
   }
 }
 
-function createLeafNodeSelectorSets(selectorKeys, reduced_ova_array) {
+function createLeafNodeSelectorSets(
+  selectorKeys,
+  reduced_ova_array,
+  optionCount
+) {
   console.log({ rawSetectorKeys: selectorKeys, reduced_ova_array });
   let variantPickerKeySets = [];
 
@@ -98,7 +103,11 @@ function createLeafNodeSelectorSets(selectorKeys, reduced_ova_array) {
     let variantPickerKey = [];
     let occupiedIndexSet = new Set();
     selectorKeys.forEach((selectorKey) => {
-      if (selectorKey[ova].length === 1) {
+      if (!Object.hasOwn(selectorKey, ova) || !selectorKey[ova].length) {
+        return;
+      }
+
+      if (selectorKey[ova].length === 1 || optionCount === 1) {
         variantPickerKey.push(selectorKey[ova][0]);
         occupiedIndexSet.add(0);
       } else {
@@ -110,6 +119,7 @@ function createLeafNodeSelectorSets(selectorKeys, reduced_ova_array) {
       }
     });
     variantPickerKeySets.push(variantPickerKey);
+    console.log({ occupiedIndexSet });
   });
 
   console.log({ variantPickerKeySets });
@@ -200,8 +210,10 @@ async function getSelectorUsingOVA() {
 
   let variantPickerKeySets = createLeafNodeSelectorSets(
     selectorKeys,
-    reduced_ova_array
+    reduced_ova_array,
+    optionCount
   );
+  console.log({ variantPickerKeySets });
   let finalVariantPickerSet = variantPickerKeySets.map((set) =>
     createVariantPicker(set, optionCount)
   );

@@ -105,91 +105,6 @@ function getParentNodeForVPCSearch(node, recall = false) {
   };
 }
 
-// HELPER:
-// To find the element whose tagName, or one of the classes
-// matches with phrases like variant-picker, option_selectors, etc.
-// most theme would resort to this kind of nomenclature.
-function getRegexMatchingVariantPickerCandidates(parentNode, productJSON) {
-  const array_A = [
-    "variant",
-    "variants",
-    "swatch",
-    "option",
-    "options",
-    "product",
-    "selector",
-    "productform", // testing
-    "globo",
-  ];
-  const array_B = [
-    "variant",
-    "variants",
-    "picker",
-    "pickers",
-    "select",
-    "selects",
-    "selector",
-    "selectors",
-    "radio",
-    "radios",
-    "wrapper",
-    "container",
-    "option",
-    "options",
-    "swatch",
-    "swatches",
-    "update", // for testing purpose
-    "block", // for testing purpose.
-    "form", // for testing purpose.
-    "list", // for testing purpose.
-  ];
-
-  // The smaller these two arrays array_A and array_B are, the better.
-  // Their lengths are proportional to our dependency on the theme, which we wish to reduce
-
-  // ORIGIANL:
-  // const regex = new RegExp(
-  //   `(${array_A.join("|")})([-_]+)(${array_B.join("|")})([-_]+[a-z0-9]+)*`,
-  //   "i"
-  // );
-
-  // TESTING :
-  const regex = new RegExp(
-    `(${array_A.join("|")})(?:[-_]*)(?:${array_B.join("|")})(?:[a-z0-9]*)`,
-    "i"
-  );
-
-  const matchedElements = Array.from(
-    // parentNode.querySelectorAll("div, fieldset, form, section, ul")
-    parentNode.querySelectorAll("*")
-  ).filter((el) => {
-    // THE MOST OBVIOUS SIGN OF A VARIANT PICKER IN CASE OF RADIO BUTTONS:
-    if (el.tagName.toLowerCase() === "fieldset") return true;
-
-    // reject extremely narrow candidates
-    if (
-      ["input", "select", "label", "legend", "span", "li", "a"].includes(
-        el.tagName.toLowerCase()
-      )
-    )
-      return false;
-
-    // check tag name
-    if (regex.test(el.tagName.toLowerCase())) return true;
-
-    // check id
-    if (typeof el.id === "string" && regex.test(el.id.toLowerCase()))
-      return true;
-
-    // check class names
-    return Array.from(el.classList).some((cls) => regex.test(cls));
-  });
-
-  if (matchedElements.length) return matchedElements;
-
-  return [];
-}
-
 async function getProductData(ta7_debug = false) {
   const productJsonUrl = `${window.location.pathname}.json`;
 
@@ -207,76 +122,6 @@ async function getProductData(ta7_debug = false) {
   }
 
   return data.product;
-}
-
-// HELPER:
-// Extract from the regexMatchingVPC list, those candidates which have as many other regexMatching VPCs as their children / descendant as the option Count in the product
-// or have as many children as option count in the product.
-
-function getVariantPickersHavingValidStructure(
-  variantPickerCandidates,
-  optionCount // getVariantPickersHavingValidStructure
-) {
-  const potentialVariantPickers = variantPickerCandidates.reduce(
-    (acc, vp_candidate) => {
-      // CAN WE MOVE THE isValidVariantPicker() here ?
-
-      // CURRENT LOGIC :
-      // If the vp_candidate.children !== optionCountInJSON.length
-      // check for vp_candidate.descendencts.length === optionCountInJSON.length.
-      // if the descendent check also failed, rely on the heuristic : children in vpc === optionCountInJSON
-
-      // PRODUCTION :
-      let option_wrappers = Array.from(vp_candidate.children).filter((child) =>
-        variantPickerCandidates.includes(child)
-      );
-      if (option_wrappers.length === optionCount) {
-        acc.push({ vp_candidate, option_wrappers });
-
-        // debug log
-        // console.log({
-        //   structure_validity_confimation: "Sturcture Validiy at Children Level",
-        //   vp_candidate,
-        // });
-
-        return acc;
-      }
-
-      option_wrappers = Array.from(vp_candidate.querySelectorAll("*")).filter(
-        (child) => variantPickerCandidates.includes(child)
-      );
-
-      if (option_wrappers.length === optionCount) {
-        acc.push({ vp_candidate, option_wrappers });
-
-        // debug log
-        // console.log({
-        //   structure_validity_confimation:
-        //     "Sturcture Validiy at Descendents Level",
-        //   vp_candidate,
-        // });
-
-        return acc;
-      } else if (Array.from(vp_candidate.children).length === optionCount) {
-        acc.push({
-          vp_candidate,
-          option_wrappers: Array.from(vp_candidate.children),
-        });
-
-        // debug log
-        // console.log({
-        //   structure_validity_confimation:
-        //     "Sturcture Validiy assumed since optionCount === vpc.children",
-        //   vp_candidate,
-        // });
-      }
-
-      return acc;
-    },
-    []
-  );
-
-  return potentialVariantPickers;
 }
 
 function getCorrectVariantPickerWithSelectors(
@@ -667,45 +512,8 @@ function isValidVariantPicker(
   vp_candidate,
   optionCount,
   optionValuesRack,
-  supplied_ova_array = null
+  OPTION_VALUE_ATTRIBUTES
 ) {
-  let OPTION_VALUE_ATTRIBUTES = [
-    // Tier 1 — high-confidence, canonical
-    "value",
-    "data-option-value",
-    "data-option-value-id",
-    "data-option-id",
-    "data-value",
-    "data-value-id",
-    "data-variant-id",
-    "data-variant",
-    "data-selected-value",
-
-    // Tier 2 — handles / normalized keys
-    "data-value-handle",
-    "data-option-handle",
-    "data-handle",
-    "data-option-key",
-    "data-key",
-
-    // Tier 3 — generic but meaningful
-    "data-option",
-    "data-option-index",
-    "data-index",
-    "data-name",
-    "data-current-value",
-
-    // Tier 4 — accessibility / framework-driven
-    "orig-value",
-    "aria-label",
-    "aria-valuetext",
-    // "name",
-  ];
-
-  if (supplied_ova_array && supplied_ova_array.length) {
-    OPTION_VALUE_ATTRIBUTES = supplied_ova_array;
-  }
-
   // CHECK 1 : if none of the fs_cand in the vpc are visually present, return null
   // WHY NOT ENFORCE THE VISIBILITY OF ALL THE FS_CANDs ?
   // Sometimes, the secondary option axes are hidden by the theme if they have only one option value.
@@ -728,7 +536,13 @@ function isValidVariantPicker(
     []
   );
 
-  if (visually_present_fs_cand_indices.length === 0) return null;
+  if (visually_present_fs_cand_indices.length === 0) {
+    console.log({
+      "Control_Function" : "isValidVariantPicker()",
+      "Failure" : "Variant picker is fully invisible"
+    });
+    return null;
+  }
 
   // CHECK 2 : the visually present fs_cand set and optionAxes have a 1:1 mapping
 
@@ -924,6 +738,8 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
       return null;
     }
 
+    console.log({interParents});
+
     // move one level up
     const tempParents = interParents
       .map((el) => el.parentElement)
@@ -962,7 +778,7 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
   }
 }
 
-function createLeafNodeSelectorSets(selectorKeys, reduced_ova_array) {
+function createLeafNodeSelectorSets(selectorKeys, reduced_ova_array, optionCount) {
   console.log({ rawSetectorKeys: selectorKeys, reduced_ova_array });
   let variantPickerKeySets = [];
 
@@ -970,7 +786,12 @@ function createLeafNodeSelectorSets(selectorKeys, reduced_ova_array) {
     let variantPickerKey = [];
     let occupiedIndexSet = new Set();
     selectorKeys.forEach((selectorKey) => {
-      if (selectorKey[ova].length === 1) {
+
+      if( !Object.hasOwn(selectorKey, ova) || !selectorKey[ova].length ){
+        return;
+      }
+
+      if (selectorKey[ova].length === 1 || optionCount === 1) {
         variantPickerKey.push(selectorKey[ova][0]);
         occupiedIndexSet.add(0);
       } else {
@@ -1064,7 +885,8 @@ function getVariantPickersByRevCon(optionValueRack, searchNode, optionCount) {
 
   let variantPickerKeySets = createLeafNodeSelectorSets(
     selectorKeys,
-    reduced_ova_array
+    reduced_ova_array, 
+    optionCount
   );
   let finalVariantPickerSet = variantPickerKeySets.map((set) =>
     createVariantPicker(set, optionCount)

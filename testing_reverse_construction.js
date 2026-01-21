@@ -40,6 +40,8 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
   ];
   let variantPicker = null;
 
+  // console.log({flagSelectors});
+
   // Getting the variant picker;
   while (true) {
     // termination guard to avoid infinite loops
@@ -51,7 +53,7 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
       return null;
     }
 
-    console.log({ interParents });
+    // console.log({ interParents });
 
     // move one level up
     const tempParents = interParents
@@ -119,11 +121,52 @@ function createLeafNodeSelectorSets(
       }
     });
     variantPickerKeySets.push(variantPickerKey);
-    console.log({ occupiedIndexSet });
+    // console.log({ occupiedIndexSet });
   });
 
   console.log({ variantPickerKeySets });
   return variantPickerKeySets;
+}
+
+function makeOVAKeysforOptionAxes(optionValueRack, OPTION_VALUE_ATTRIBUTES) {
+  let reduced_ova_array = OPTION_VALUE_ATTRIBUTES;
+  let temp_ova_set = new Set();
+  let selectorKeys = [];
+
+  optionValueRack.forEach((optionValue, index) => {
+    let selectorKey = {
+      A1__optionValue : optionValue,
+      index
+    };
+
+    reduced_ova_array.forEach((ova) => {
+      let attributeSelector = `[${ova}="${CSS.escape(optionValue)}"]`;
+      let selectors = Array.from(document.querySelectorAll(attributeSelector));
+
+      if (selectors.length) {
+        if (Object.hasOwn(selectorKey, ova)) {
+          selectorKey[ova].push(...selectors);
+        } else {
+          temp_ova_set.add(ova);
+          selectorKey[ova] = [];
+          selectorKey[ova].push(...selectors);
+        }
+      }
+    });
+
+    if (temp_ova_set.size) {
+      // Array.from(temp_ova_set).forEach(ova => {
+      //   if( !reduced_ova_array.includes(ova) )
+      //     reduced_ova_array.push(ova);
+      // })
+
+      reduced_ova_array = Array.from(temp_ova_set);
+    }
+    temp_ova_set.clear();
+    selectorKeys.push(selectorKey);
+  });
+
+  return { selectorKeys, reduced_ova_array };
 }
 
 async function getSelectorUsingOVA() {
@@ -162,7 +205,7 @@ async function getSelectorUsingOVA() {
 
   // GET PRODUCT DATA
   const product = await getProductData();
-  const optionCount = product.options.length;
+  let optionCount = product.options.length;
 
   // MAKE OPTION VALUE RACK
   let optionValueRack =
@@ -170,43 +213,34 @@ async function getSelectorUsingOVA() {
       ? product.options.map((option) => option.values[0])
       : product.options[0].values;
 
-  let reduced_ova_array = OPTION_VALUE_ATTRIBUTES;
-  let temp_ova_set = new Set();
-  let selectorKeys = [];
+  let { selectorKeys, reduced_ova_array } = makeOVAKeysforOptionAxes(
+    optionValueRack,
+    OPTION_VALUE_ATTRIBUTES
+  );
 
-  optionValueRack.forEach((optionValue) => {
-    let selectorKey = {
-      optionValue,
-    };
+  let populatedSelectorKeys = selectorKeys.filter((selKey) =>
+    reduced_ova_array.some((ova) => Object.hasOwn(selKey, ova))
+  );
 
-    reduced_ova_array.forEach((ova) => {
-      let attributeSelector = `[${ova}="${CSS.escape(optionValue)}"]`;
-      let selectors = Array.from(document.querySelectorAll(attributeSelector));
-
-      if (selectors.length) {
-        if (Object.hasOwn(selectorKey, ova)) {
-          selectorKey[ova].push(...selectors);
-        } else {
-          temp_ova_set.add(ova);
-          selectorKey[ova] = [];
-          selectorKey[ova].push(...selectors);
-        }
-      }
+  if (populatedSelectorKeys.length != optionCount) {
+    console.warn({
+      Control_Function: "Not all fieldsets are present",
+      Pivot: "Remaking the selectorKeys for the populated Option Axes...",
+      populatedSelectorKeys
     });
 
-    if (temp_ova_set.size) {
-      // Array.from(temp_ova_set).forEach(ova => {
-      //   if( !reduced_ova_array.includes(ova) )
-      //     reduced_ova_array.push(ova);
-      // })
-
-      reduced_ova_array = Array.from(temp_ova_set);
+    let matchedAxisIndices = populatedSelectorKeys.map(psk => psk.index);
+    if(matchedAxisIndices.length === 1){
+      optionValueRack = product.options[matchedAxisIndices[0]].values;
+      optionCount = 1;
+    }else{
+      optionValueRack = matchedAxisIndices.map(index => product.options[index][0]);
+      optionCount = matchedAxisIndices.length;
     }
-    temp_ova_set.clear();
-    selectorKey.A1__optionValue = selectorKey.optionValue;
-    delete selectorKey.optionValue;
-    selectorKeys.push(selectorKey);
-  });
+
+    let newSelectorKeyData = makeOVAKeysforOptionAxes(optionValueRack, reduced_ova_array);
+    ({selectorKeys, reduced_ova_array} = newSelectorKeyData);
+  }
 
   let variantPickerKeySets = createLeafNodeSelectorSets(
     selectorKeys,

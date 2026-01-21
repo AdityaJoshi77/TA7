@@ -76,7 +76,11 @@ function isElementVisible(el) {
 // to get the specified ancestor of variantID anchorProductForm which could
 // be a potential container of variant picker.
 // Unless specified, we get the 4th ancestor of the variantID anchorProductForm.
-function getParentNodeForVPCSearch(node, recall = false) {
+function getParentNodeForVPCSearch(
+  node,
+  specifiedDepth = null,
+  recall = false
+) {
   let current;
   let candidate;
 
@@ -85,7 +89,7 @@ function getParentNodeForVPCSearch(node, recall = false) {
     current = node.parentElement;
     candidate = current;
 
-    let maxDepth = 4;
+    let maxDepth = specifiedDepth || 4;
     let depth = 0;
 
     while (current && current !== document.body && depth < maxDepth) {
@@ -538,8 +542,8 @@ function isValidVariantPicker(
 
   if (visually_present_fs_cand_indices.length === 0) {
     console.log({
-      "Control_Function" : "isValidVariantPicker()",
-      "Failure" : "Variant picker is fully invisible"
+      Control_Function: "isValidVariantPicker()",
+      Failure: "Variant picker is fully invisible",
     });
     return null;
   }
@@ -738,7 +742,7 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
       return null;
     }
 
-    console.log({interParents});
+    console.log({ interParents });
 
     // move one level up
     const tempParents = interParents
@@ -778,7 +782,11 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
   }
 }
 
-function createLeafNodeSelectorSets(selectorKeys, reduced_ova_array, optionCount) {
+function createLeafNodeSelectorSets(
+  selectorKeys,
+  reduced_ova_array,
+  optionCount
+) {
   console.log({ rawSetectorKeys: selectorKeys, reduced_ova_array });
   let variantPickerKeySets = [];
 
@@ -786,8 +794,7 @@ function createLeafNodeSelectorSets(selectorKeys, reduced_ova_array, optionCount
     let variantPickerKey = [];
     let occupiedIndexSet = new Set();
     selectorKeys.forEach((selectorKey) => {
-
-      if( !Object.hasOwn(selectorKey, ova) || !selectorKey[ova].length ){
+      if (!Object.hasOwn(selectorKey, ova) || !selectorKey[ova].length) {
         return;
       }
 
@@ -885,12 +892,23 @@ function getVariantPickersByRevCon(optionValueRack, searchNode, optionCount) {
 
   let variantPickerKeySets = createLeafNodeSelectorSets(
     selectorKeys,
-    reduced_ova_array, 
+    reduced_ova_array,
     optionCount
   );
   let finalVariantPickerSet = variantPickerKeySets.map((set) =>
     createVariantPicker(set, optionCount)
   );
+
+  if (
+    !finalVariantPickerSet.length ||
+    reduced_ova_array.length === OPTION_VALUE_ATTRIBUTES.length
+  ) {
+    console.warn({
+      Control_Function: "getVariantPickersByRevCon()",
+      Failure: "could not extract the variant picker",
+    });
+    return null;
+  }
 
   return {
     OPTION_VALUE_ATTRIBUTES: reduced_ova_array,
@@ -901,8 +919,6 @@ function getVariantPickersByRevCon(optionValueRack, searchNode, optionCount) {
 async function test(getFullData = false) {
   let targetData = {
     A__finalVariantPicker: null, //finalVariantPickerTest,
-    B__validStructureVPC: null, //variantPickerSet,
-    C__regexMatchingVPCs: null, // regexMatchingVPC,
     D__parentNodeForVPCSearch: null, // {
     //  searchNode : candidateObject.parent,
     //  parentFoundInAnchorMode
@@ -924,7 +940,7 @@ async function test(getFullData = false) {
 
   // Failure to find the anchorProductForm
   // INFERENCE: Our fundamental assumptions are violated by the theme. (Absolute Failure)
-  if (!anchorProductFormData.anchorProductForm) {
+  if (!anchorProductForm && !anchorProductFormData.nameIdAnchors) {
     console.error({
       status: "[TA7] Failed",
       cause: "variantID anchorForm not found",
@@ -940,7 +956,11 @@ async function test(getFullData = false) {
   const optionCount = product.options.length;
 
   // Find a stable parent,
-  let candidateObject = getParentNodeForVPCSearch(anchorProductForm, false);
+  let anchorHook = anchorProductForm || anchorProductFormData.nameIdAnchors[0];
+  let candidateObject;
+  if (anchorHook === anchorProductForm)
+    candidateObject = getParentNodeForVPCSearch(anchorHook, null, false);
+  else candidateObject = getParentNodeForVPCSearch(anchorHook, 5, false);
   let parentFoundInAnchorMode = true;
 
   targetData.D__parentNodeForVPCSearch = {
@@ -953,11 +973,21 @@ async function test(getFullData = false) {
       ? product.options.map((option) => option.values[0])
       : product.options[0].values;
 
-  let { OPTION_VALUE_ATTRIBUTES, variantPickerSet } = getVariantPickersByRevCon(
+  let variantPickerGenData = getVariantPickersByRevCon(
     optionValueRack,
     candidateObject.parent,
     optionCount
   );
+
+  if (!variantPickerGenData) {
+    return {
+      "[TA7 VERDICT]": "Failure",
+      Failure: "No potential variant pickers found",
+      targetData,
+    };
+  }
+
+  let {variantPickerSet, OPTION_VALUE_ATTRIBUTES} = variantPickerGenData;
 
   let finalVariantPicker = null;
   for (const item of variantPickerSet) {

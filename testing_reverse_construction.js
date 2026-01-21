@@ -28,7 +28,7 @@ function isElementVisible(el) {
   );
 }
 
-function createVariantPicker(leafNodeSelectorsArr) {
+function createVariantPicker(leafNodeSelectorsArr, optionCount) {
   if (!Array.isArray(leafNodeSelectorsArr) || !leafNodeSelectorsArr.length) {
     return null;
   }
@@ -55,6 +55,13 @@ function createVariantPicker(leafNodeSelectorsArr) {
 
     // lowest common ancestor found
     if (parentSet.size === 1) {
+      if (optionCount === 1) {
+        return {
+          vp_candidate: parentSet.values().next().value.parentElement,
+          option_wrappers: parentSet.values().next().value,
+        };
+      }
+
       return {
         vp_candidate: parentSet.values().next().value,
         option_wrappers: tempParents,
@@ -81,7 +88,7 @@ function createLeafNodeSelectorSets(selectorKeys, reduced_ova_array) {
         let firstAvailIndex = selectorKey[ova].findIndex(
           (val, index) => !occupiedIndexSet.has(index)
         );
-        occupiedIndexSet.add(firstAvailIndex)
+        occupiedIndexSet.add(firstAvailIndex);
         variantPickerKey.push(selectorKey[ova][firstAvailIndex]);
       }
     });
@@ -140,50 +147,46 @@ async function getSelectorUsingOVA() {
   let temp_ova_set = new Set();
   let selectorKeys = [];
 
-  if (optionCount > 1) {
-    optionValueRack.forEach((optionValue) => {
-      let selectorKey = {
-        optionValue,
-      };
+  optionValueRack.forEach((optionValue) => {
+    let selectorKey = {
+      optionValue,
+    };
 
-      reduced_ova_array.forEach((ova) => {
-        let attributeSelector = `[${ova}="${CSS.escape(optionValue)}"]`;
-        let selectors = Array.from(
-          document.querySelectorAll(attributeSelector)
-        );
+    reduced_ova_array.forEach((ova) => {
+      let attributeSelector = `[${ova}="${CSS.escape(optionValue)}"]`;
+      let selectors = Array.from(document.querySelectorAll(attributeSelector));
 
-        if (selectors.length) {
-          if (Object.hasOwn(selectorKey, ova)) {
-            selectorKey[ova].push(...selectors);
-          } else {
-            temp_ova_set.add(ova);
-            selectorKey[ova] = [];
-            selectorKey[ova].push(...selectors);
-          }
+      if (selectors.length) {
+        if (Object.hasOwn(selectorKey, ova)) {
+          selectorKey[ova].push(...selectors);
+        } else {
+          temp_ova_set.add(ova);
+          selectorKey[ova] = [];
+          selectorKey[ova].push(...selectors);
         }
-      });
-
-      if (temp_ova_set.size) {
-        // Array.from(temp_ova_set).forEach(ova => {
-        //   if( !reduced_ova_array.includes(ova) )
-        //     reduced_ova_array.push(ova);
-        // })
-
-        reduced_ova_array = Array.from(temp_ova_set);
       }
-      temp_ova_set.clear();
-      selectorKey.A1__optionValue = selectorKey.optionValue;
-      delete selectorKey.optionValue;
-      selectorKeys.push(selectorKey);
     });
-  }
+
+    if (temp_ova_set.size) {
+      // Array.from(temp_ova_set).forEach(ova => {
+      //   if( !reduced_ova_array.includes(ova) )
+      //     reduced_ova_array.push(ova);
+      // })
+
+      reduced_ova_array = Array.from(temp_ova_set);
+    }
+    temp_ova_set.clear();
+    selectorKey.A1__optionValue = selectorKey.optionValue;
+    delete selectorKey.optionValue;
+    selectorKeys.push(selectorKey);
+  });
 
   let variantPickerKeySets = createLeafNodeSelectorSets(
     selectorKeys,
     reduced_ova_array
   );
   let finalVariantPickerSet = variantPickerKeySets.map((set) =>
-    createVariantPicker(set)
+    createVariantPicker(set, optionCount)
   );
 
   return {

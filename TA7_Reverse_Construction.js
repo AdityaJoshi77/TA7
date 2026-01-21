@@ -1,4 +1,3 @@
-
 // HELPER:
 // Find the theme invariant - input/select with name = id.
 // Most shopify themes need an html element which will hold the id of the current variant
@@ -761,7 +760,7 @@ function isValidVariantPicker(
       Control_Function: "isValidVariantPicker()",
       Error: "Invalid vp_candidate",
       vp_candidate,
-      ov_attributes_filtered_per_fsCand
+      ov_attributes_filtered_per_fsCand,
     });
     return null;
   }
@@ -796,7 +795,7 @@ function isValidVariantPicker(
 
   // IF optionCount > 1
   // Logic Change : we are now checking for 1:1 mapping for all the fs_cands
-  // why : to ferret out a fs_cand disguised as vp_candidate, in a disguised option wrapper, 
+  // why : to ferret out a fs_cand disguised as vp_candidate, in a disguised option wrapper,
   // not all the option_wrappers will map 1:1 with the option axes.
 
   let fieldSetMap = new Array(optionCount).fill(-1);
@@ -837,6 +836,8 @@ function isValidVariantPicker(
           one2oneMappingDetected = true;
           fieldSetMap[fs_cand_index] = optionAxisIndex;
           selector_yielding_ova_perFsCand.push(selectorYieldingOVAList);
+        } else if (isNumericString(optionValuesRack[optionAxisIndex])) {
+          continue;
         } else {
           console.log({
             "isValidVariantPicker()": "1:1 mapping failed",
@@ -890,6 +891,14 @@ function isValidVariantPicker(
   // At this stage, the function can detect only those disguised vp_candidates
   // which were structurally verified. If some option_wrapper is not structurally verified
   // we will still miss it.
+}
+
+function isNumericString(value) {
+  return (
+    typeof value === "string" &&
+    value.trim() !== "" &&
+    !Number.isNaN(Number(value))
+  );
 }
 
 async function test(getFullData = false) {
@@ -1054,7 +1063,7 @@ async function test(getFullData = false) {
 
   // if you have disguised option wrappers, assume candidateObject.parent as the new variant picker wrapper
   if (disguisedOptionWrappersDetected.length) {
-    if( !supplied_ova_array.length ){
+    if (!supplied_ova_array.length) {
       supplied_ova_array = Array.from(supplied_ova_array);
     }
     let variantPicker = {
@@ -1146,7 +1155,7 @@ async function test(getFullData = false) {
 
 await test();
 
-// [BUG ALERT] : Currently, isValidVariantPicker() would give strange results if more than one, but not all 
+// [BUG ALERT] : Currently, isValidVariantPicker() would give strange results if more than one, but not all
 // option_wrappers in the vp_candidate map 1:1 with the option axis.
 
 // [BUT ALERT] : Sometimes, you may not find as many disguised option_wrappers as optionCount. (Easier to handle).

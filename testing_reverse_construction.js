@@ -34,7 +34,13 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
   }
 
   let interParents = [...leafNodeSelectorsArr];
+  let flagSelectors = [
+    leafNodeSelectorsArr[0],
+    leafNodeSelectorsArr[leafNodeSelectorsArr.length - 1],
+  ];
+  let variantPicker = null;
 
+  // Getting the variant picker;
   while (true) {
     // termination guard to avoid infinite loops
     if (
@@ -53,21 +59,32 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
     // collect parents of option wrappers
     const parentSet = new Set(tempParents.map((el) => el.parentElement));
 
+    let LCA = Array.from(parentSet).find((parent) =>
+      flagSelectors.every((flag) => parent.contains(flag))
+    );
+
     // lowest common ancestor found
-    if (parentSet.size === 1) {
-      if (optionCount === 1) {
-        return {
-          vp_candidate: parentSet.values().next().value.parentElement,
-          option_wrappers: parentSet.values().next().value,
-        };
+    if (LCA) {
+      console.log({ LCA, flagSelectors });
+      variantPicker = LCA;
+
+      let option_wrappers = null;
+      if (optionCount > 1) {
+        option_wrappers = tempParents.map((temp) => {
+          while (temp.parentElement !== variantPicker)
+            temp = temp.parentElement;
+          return temp;
+        });
+      } else {
+        option_wrappers = [LCA],
+        variantPicker = LCA.parentElement
       }
 
       return {
-        vp_candidate: parentSet.values().next().value,
-        option_wrappers: tempParents,
+        variantPicker,
+        option_wrappers,
       };
     }
-
     // continue climbing
     interParents = tempParents;
   }

@@ -901,10 +901,185 @@ function isNumericString(value) {
   );
 }
 
+function createVariantPicker(leafNodeSelectorsArr, optionCount) {
+  if (!Array.isArray(leafNodeSelectorsArr) || !leafNodeSelectorsArr.length) {
+    return null;
+  }
+
+  let interParents = [...leafNodeSelectorsArr];
+  let flagSelectors = [
+    leafNodeSelectorsArr[0],
+    leafNodeSelectorsArr[leafNodeSelectorsArr.length - 1],
+  ];
+  let variantPicker = null;
+
+  // Getting the variant picker;
+  while (true) {
+    // termination guard to avoid infinite loops
+    if (
+      interParents.every(
+        (el) => !el || el === document.body || !el.parentElement
+      )
+    ) {
+      return null;
+    }
+
+    // move one level up
+    const tempParents = interParents
+      .map((el) => el.parentElement)
+      .filter(Boolean);
+
+    // collect parents of option wrappers
+    const parentSet = new Set(tempParents.map((el) => el.parentElement));
+
+    let LCA = Array.from(parentSet).find((parent) =>
+      flagSelectors.every((flag) => parent.contains(flag))
+    );
+
+    // lowest common ancestor found
+    if (LCA) {
+      console.log({ LCA, flagSelectors });
+      variantPicker = LCA;
+
+      let option_wrappers = null;
+      if (optionCount > 1) {
+        option_wrappers = tempParents.map((temp) => {
+          while (temp.parentElement !== variantPicker)
+            temp = temp.parentElement;
+          return temp;
+        });
+      } else {
+        (option_wrappers = [LCA]), (variantPicker = LCA.parentElement);
+      }
+
+      return {
+        variantPicker,
+        option_wrappers,
+      };
+    }
+    // continue climbing
+    interParents = tempParents;
+  }
+}
+
+function createLeafNodeSelectorSets(selectorKeys, reduced_ova_array) {
+  console.log({ rawSetectorKeys: selectorKeys, reduced_ova_array });
+  let variantPickerKeySets = [];
+
+  reduced_ova_array.forEach((ova) => {
+    let variantPickerKey = [];
+    let occupiedIndexSet = new Set();
+    selectorKeys.forEach((selectorKey) => {
+      if (selectorKey[ova].length === 1) {
+        variantPickerKey.push(selectorKey[ova][0]);
+        occupiedIndexSet.add(0);
+      } else {
+        let firstAvailIndex = selectorKey[ova].findIndex(
+          (val, index) => !occupiedIndexSet.has(index)
+        );
+        occupiedIndexSet.add(firstAvailIndex);
+        variantPickerKey.push(selectorKey[ova][firstAvailIndex]);
+      }
+    });
+    variantPickerKeySets.push(variantPickerKey);
+  });
+
+  console.log({ variantPickerKeySets });
+  return variantPickerKeySets;
+}
+
+function getVariantPickersByRevCon(optionValueRack, searchNode, optionCount) {
+  let OPTION_VALUE_ATTRIBUTES = [
+    // Tier 1 — high-confidence, canonical
+    "value",
+    "data-option-value",
+    "data-option-value-id",
+    "data-option-id",
+    "data-value",
+    "data-value-id",
+    "data-variant-id",
+    "data-variant",
+    "data-selected-value",
+
+    // Tier 2 — handles / normalized keys
+    "data-value-handle",
+    "data-option-handle",
+    "data-handle",
+    "data-option-key",
+    "data-key",
+
+    // Tier 3 — generic but meaningful
+    "data-option",
+    "data-option-index",
+    "data-index",
+    "data-name",
+    "data-current-value",
+
+    // Tier 4 — accessibility / framework-driven
+    "orig-value",
+    "aria-label",
+    "aria-valuetext",
+    // "name",
+  ];
+
+  let reduced_ova_array = OPTION_VALUE_ATTRIBUTES;
+  let temp_ova_set = new Set();
+  let selectorKeys = [];
+
+  optionValueRack.forEach((optionValue) => {
+    let selectorKey = {
+      optionValue,
+    };
+
+    reduced_ova_array.forEach((ova) => {
+      let attributeSelector = `[${ova}="${CSS.escape(optionValue)}"]`;
+      let selectors = Array.from(
+        searchNode.querySelectorAll(attributeSelector)
+      );
+
+      if (selectors.length) {
+        if (Object.hasOwn(selectorKey, ova)) {
+          selectorKey[ova].push(...selectors);
+        } else {
+          temp_ova_set.add(ova);
+          selectorKey[ova] = [];
+          selectorKey[ova].push(...selectors);
+        }
+      }
+    });
+
+    if (temp_ova_set.size) {
+      // Array.from(temp_ova_set).forEach(ova => {
+      //   if( !reduced_ova_array.includes(ova) )
+      //     reduced_ova_array.push(ova);
+      // })
+
+      reduced_ova_array = Array.from(temp_ova_set);
+    }
+    temp_ova_set.clear();
+    selectorKey.A1__optionValue = selectorKey.optionValue;
+    delete selectorKey.optionValue;
+    selectorKeys.push(selectorKey);
+  });
+
+  let variantPickerKeySets = createLeafNodeSelectorSets(
+    selectorKeys,
+    reduced_ova_array
+  );
+  let finalVariantPickerSet = variantPickerKeySets.map((set) =>
+    createVariantPicker(set, optionCount)
+  );
+
+  return {
+    OPTION_VALUE_ATTRIBUTES: reduced_ova_array,
+    variantPickerSet: finalVariantPickerSet,
+  };
+}
+
 async function test(getFullData = false) {
   let targetData = {
     A__finalVariantPicker: null, //finalVariantPickerTest,
-    B__validStructureVPC: null, //validStructuredVPC,
+    B__validStructureVPC: null, //variantPickerSet,
     C__regexMatchingVPCs: null, // regexMatchingVPC,
     D__parentNodeForVPCSearch: null, // {
     //  searchNode : candidateObject.parent,
@@ -943,100 +1118,36 @@ async function test(getFullData = false) {
   const optionCount = product.options.length;
 
   // Find a stable parent,
-  // and look for regex-matching variant picker candidates in that parent
   let candidateObject = getParentNodeForVPCSearch(anchorProductForm, false);
   let parentFoundInAnchorMode = true;
-  let regexMatchingVPC = getRegexMatchingVariantPickerCandidates(
-    candidateObject.parent,
-    product
-  );
-
-  // if variant picker candidates are not found in the current parentNode
-  // look for the same in a higher parentNode.
-  while (
-    candidateObject &&
-    !regexMatchingVPC.length &&
-    !candidateObject.isBodyNext
-  ) {
-    parentFoundInAnchorMode = false;
-    candidateObject = getParentNodeForVPCSearch(candidateObject.parent, true);
-    regexMatchingVPC = getRegexMatchingVariantPickerCandidates(
-      candidateObject.parent
-    );
-  }
 
   targetData.D__parentNodeForVPCSearch = {
     searchNode: candidateObject.parent,
     parentFoundInAnchorMode,
   };
 
-  // Failure to find the variant picker candidates
-  // INFERENCE : The variant picker regex might be insufficient
-  if (!regexMatchingVPC.length) {
-    console.log({
-      status: "[TA7 failed] : No DOM node matched with variant picker regex",
-    });
-    return targetData;
-  }
-
-  targetData.C__regexMatchingVPCs = regexMatchingVPC;
-
-  let validStructuredVPC = getVariantPickersHavingValidStructure(
-    regexMatchingVPC,
-    optionCount
-  );
-
-  if (!validStructuredVPC.length) {
-    console.log({
-      status: "[TA7 failed] : No regex matching VPC is structurally valid",
-    });
-    return targetData;
-  }
-
-  targetData.B__validStructureVPC = validStructuredVPC;
-
-  let finalVariantPicker = null;
-  let supplied_ova_array = new Set();
-  let disguisedOptionWrappersDetected = [];
-  let fieldSetMap_OW = new Array(optionCount).fill(-1);
-  let fieldSetIndex = 0;
   let optionValueRack =
-    product.options.length > 1
+    optionCount > 1
       ? product.options.map((option) => option.values[0])
       : product.options[0].values;
 
-  for (const item of validStructuredVPC) {
-    // NEW PIPELINE:
-    // sugggested optimization : selective calling of isValidVariantPicker
-    // once an option_wrapper is found before a variant picker.
+  let { OPTION_VALUE_ATTRIBUTES, variantPickerSet } = getVariantPickersByRevCon(
+    optionValueRack,
+    candidateObject.parent,
+    optionCount
+  );
+
+  let finalVariantPicker = null;
+  for (const item of variantPickerSet) {
     const vp_validation_data = isValidVariantPicker(
       item,
       optionCount,
       optionValueRack,
-      Array.from(supplied_ova_array)
+      OPTION_VALUE_ATTRIBUTES
     );
 
     // no 1:1 mapping in item : DISCARD and continue;
     if (!vp_validation_data) continue;
-
-    // option wrapper disguised as variant picker:
-    if (vp_validation_data.disguisedOptionWrapper) {
-      vp_validation_data.selector_yielding_ova_perFsCand.forEach((ovaList) => {
-        ovaList.forEach((ova) => supplied_ova_array.add(ova));
-      });
-
-      disguisedOptionWrappersDetected.push(vp_validation_data.trueFsCand);
-
-      // populate the fieldSetMap for the new variant picker
-      fieldSetMap_OW[fieldSetIndex++] =
-        vp_validation_data.matchingOptionAxisIndex;
-
-      if (disguisedOptionWrappersDetected.length === optionCount) {
-        supplied_ova_array = Array.from(supplied_ova_array);
-        break;
-      }
-    }
-
     // true variant picker detected : success
     else {
       // OLD PIPELINE:
@@ -1061,49 +1172,6 @@ async function test(getFullData = false) {
     }
   }
 
-  // if you have disguised option wrappers, assume candidateObject.parent as the new variant picker wrapper
-  if (disguisedOptionWrappersDetected.length) {
-    if (!supplied_ova_array.length) {
-      supplied_ova_array = Array.from(supplied_ova_array);
-    }
-    let variantPicker = {
-      vp_candidate: candidateObject.parent,
-      option_wrappers: disguisedOptionWrappersDetected,
-    };
-
-    console.log({
-      Control_Function: "test()",
-      variantPicker,
-      supplied_ova_array,
-    });
-
-    let vp_validation_data = {
-      selector_yielding_ova_perFsCand: new Array(optionCount).fill(
-        supplied_ova_array
-      ),
-      fieldSetMap: fieldSetMap_OW,
-    };
-
-    let finalSelectorResult = getCorrectVariantPickerWithSelectors(
-      variantPicker,
-      optionCount,
-      optionValueRack,
-      product.options,
-      vp_validation_data
-    );
-
-    if (finalSelectorResult) {
-      variantPicker.selectors = finalSelectorResult.selector_data;
-      variantPicker.selectorMetaData = {
-        dataValuesMatched: finalSelectorResult.dataValuesMatched,
-        matchedAttributes: finalSelectorResult.matchedAttributes,
-        selector_set: finalSelectorResult.selector_set,
-      };
-
-      finalVariantPicker = variantPicker;
-    }
-  }
-
   // At this very juncture, the final variant picker, the fieldsets, the selectors
   // are supposed to be detected
 
@@ -1115,13 +1183,13 @@ async function test(getFullData = false) {
 
   if (finalVariantPicker) {
     finalVariantPicker = {
-      a__vp_candidate: finalVariantPicker.vp_candidate,
+      a__variantPicker: finalVariantPicker.variantPicker,
       b__option_wrappers: finalVariantPicker.option_wrappers,
       c__selectors: finalVariantPicker.selectors,
       d__selector_meta_data: finalVariantPicker.selectorMetaData,
       e__camouflage_selectors:
         finalVariantPicker.camouflage_selectors ||
-        "Camouflage not installed on store",
+        "Camouflage not enabled on store",
     };
     targetData.A__finalVariantPicker = finalVariantPicker;
   }

@@ -749,6 +749,7 @@ function isNumericString(value) {
 }
 
 function createVariantPicker(leafNodeSelectorsArr, optionCount) {
+  
   // DESCRIPTION:
   /**: #region
    * Reconstructs a variant picker container from leaf selector nodes.
@@ -811,6 +812,7 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
     // collect parents of option wrappers
     const parentSet = new Set(tempParents.map((el) => el.parentElement));
 
+    // check if you get some parent in the parentSet which contains all the flagSelectors
     let LCA = Array.from(parentSet).find((parent) =>
       flagSelectors.every((flag) => parent.contains(flag))
     );

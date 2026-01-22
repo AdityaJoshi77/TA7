@@ -396,7 +396,7 @@ function extractFinalSelectors(selector_set) {
     // phase 1: only one candidate → accept without testing
     if (entries.length === 1) {
       const [[attribute_name, selectors]] = entries;
-      extractedSelectorData.push({ attribute_name, selectors });
+      extractedSelectorData.push({ value_attribute:attribute_name, selectors });
       continue;
     }
 
@@ -435,7 +435,7 @@ function extractFinalSelectors(selector_set) {
     }
 
     finalSelectorSet = {
-      attribute_name: finalSelectorSet.ov_attribute,
+      value_attribute: finalSelectorSet.ov_attribute,
       selectors: finalSelectorSet.selectors,
     };
 

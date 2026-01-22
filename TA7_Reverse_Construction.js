@@ -4,6 +4,23 @@
 // for the add-to-cart / buy form submission.
 // If this is found, we proceed ahead, if not, we revert to manual extraction.
 function findAnchorProductForm() {
+  /** DESCRIPTION:
+   * Attempts to locate the product form that controls variant selection.
+   *
+   * WHY THIS EXISTS:
+   * Most Shopify themes submit variant changes via an element named "id".
+   * This function finds that anchor and walks upward to identify the
+   * enclosing product form using regex heuristics.
+   *
+   * RETURNS:
+   * - validNameIdElement: the actual input/select[name="id"]
+   * - anchorProductForm: closest visible ancestor matching product form intent
+   * - nameIdAnchors: all discovered variant ID anchors
+   *
+   * FAILURE MODE:
+   * Returns null anchorProductForm when themes violate assumptions.
+   */
+
   const anchors = Array.from(
     document.querySelectorAll('input[name="id"], select[name="id"]')
   );
@@ -365,6 +382,22 @@ function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
 // HELPER:
 // Checks the selectors' validity :
 function extractFinalSelectors(selector_set) {
+
+  /** DESCRIPTION:
+ * Resolves the final selector set for each option axis.
+ *
+ * STRATEGY:
+ * - If only one candidate → accept immediately
+ * - If multiple candidates:
+ *   • Prefer visible selector sets
+ *   • Break ties via semantic tag priority
+ *
+ * WHY TAG PRIORITY EXISTS:
+ * Inputs/options/buttons encode stronger user intent
+ * than generic containers like div or li.
+ */
+
+
   let extractedSelectorData = [];
 
   // console.log({
@@ -391,8 +424,9 @@ function extractFinalSelectors(selector_set) {
     for (const [ov_attribute, selectors] of entries) {
       isSelectorSetVisible = selectors.some(
         (selector) =>
-          // isElementVisible(selector) // should we look at the visibility of the selector,
-          isElementVisible(selector.parentElement) // or at the visibility of the selector's immediate parent ? ,
+          isElementVisible(selector.parentElement)
+        // We check the parent element's visibility to account for cases
+        // where the selector itself might be hidden but its parent is visible.
       );
 
       if (isSelectorSetVisible) {
@@ -402,12 +436,8 @@ function extractFinalSelectors(selector_set) {
       }
     }
 
-    // phase 3 : all candidates hidden ? -> go for the best one as per heuristic
-    // console.log({
-    //   visibleSelectorSet,
-    //   invisibleSelectorSet,
-    // });
-
+    // phase 2.1 : you have visible selector sets, choose from these only
+    // if there are multiplse visible selector sets, choose the best one
     if (visibleSelectorSet.length) {
       if (visibleSelectorSet.length === 1) {
         finalSelectorSet = visibleSelectorSet[0];
@@ -417,22 +447,11 @@ function extractFinalSelectors(selector_set) {
         //   Best_Selector_Set: finalSelectorSet,
         // });
       }
-    } else {
+    } 
+    // phase 2.2 : all selector sets are invisible, choose the best one
+    else {
       finalSelectorSet = returnBestSelectorSet(invisibleSelectorSet);
     }
-
-    if (!finalSelectorSet) {
-      console.warn({
-        Control_Function: "extractFinalSelectors()",
-        Status: "[Failure] : Could not extract selectors for the option axis",
-        optionAxisObject,
-      });
-      continue;
-    }
-
-    // console.log({
-    //   finalSelectorSet,
-    // });
 
     finalSelectorSet = {
       attribute_name: finalSelectorSet.ov_attribute,
@@ -446,6 +465,22 @@ function extractFinalSelectors(selector_set) {
 }
 
 function returnBestSelectorSet(selectorSetArray) {
+
+  /** DESCRIPTION:
+   * If you get multiple selector sets for an option axis,
+   * this function selects the best one based on tag priority.
+   * 
+   * STRATEGY:
+   * - Define a priority list of HTML tags
+   * - Evaluate each selector set's representative tag
+   * - Select the set with the highest priority tag
+   * 
+   * WHY THIS MATTERS:
+   * Some themes use multiple hidden elements
+   * to encode the same option values.
+   * This heuristic helps pick the most semantically relevant one.
+   * 
+  **/
   let selectorPriorityList_flat = [
     "input",
     "option",
@@ -514,6 +549,23 @@ function isValidVariantPicker(
   optionValuesRack,
   OPTION_VALUE_ATTRIBUTES
 ) {
+  /** DESCRIPTION:
+   * Validates whether a candidate variant picker is legitimate.
+   *
+   * VALIDATION CRITERIA:
+   * 1. At least one option wrapper must be visible
+   * 2. Option wrappers must map 1:1 with option axes
+   * 3. Each wrapper must yield selectors for real option values
+   *
+   * SPECIAL CASES:
+   * - Single-option products relax 1:1 constraints
+   * - Numeric option values allow limited ambiguity
+   *
+   * RETURNS:
+   * - vp_validation_data on success
+   * - null on failure
+   */
+
   // CHECK 1 : if none of the fs_cand in the vpc are visually present, return null
   // WHY NOT ENFORCE THE VISIBILITY OF ALL THE FS_CANDs ?
   // Sometimes, the secondary option axes are hidden by the theme if they have only one option value.
@@ -724,7 +776,8 @@ function isNumericString(value) {
 }
 
 function createVariantPicker(leafNodeSelectorsArr, optionCount) {
-  /** DESCRIPTION:
+  // DESCRIPTION:
+  /**: #region
    * Reconstructs a variant picker container from leaf selector nodes.
    *
    * MENTAL MODEL:
@@ -753,6 +806,7 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
    * FAILURE MODE:
    * Returns null if no stable ancestor convergence is found.
    */
+  // #endregion
 
   if (!Array.isArray(leafNodeSelectorsArr) || !leafNodeSelectorsArr.length) {
     return null;
@@ -787,6 +841,9 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
     let LCA = Array.from(parentSet).find((parent) =>
       flagSelectors.every((flag) => parent.contains(flag))
     );
+
+    // This LCA is that node, running querySelectorAll on which
+    // can yield all the leafNodeSelectorsArr elements.
 
     // lowest common ancestor found
     if (LCA) {

@@ -687,6 +687,13 @@ function isValidVariantPicker(
   // It can mean only one thing :
   // We have an option_wrapper disguised as the variant picker.
   if (mappedFscandCount > 1) return vp_validation_data;
+  console.warn({
+    Control_Function: "isValidVariantPicker()",
+    message: "Disguised Option wrapper",
+    vp_candidate,
+  });
+
+  return null;
 
   // if the vp_candidate is a disguised option_wrapper,
   // we attach a disguisedOptionWrapper Boolean flag to the vp_validation_data
@@ -717,6 +724,36 @@ function isNumericString(value) {
 }
 
 function createVariantPicker(leafNodeSelectorsArr, optionCount) {
+  /** DESCRIPTION:
+   * Reconstructs a variant picker container from leaf selector nodes.
+   *
+   * MENTAL MODEL:
+   * If multiple option elements belong to the same variant picker,
+   * they must converge at a common ancestor.
+   *
+   * This function climbs upward from leaf nodes to find:
+   * - The lowest common ancestor (LCA)
+   * - That ancestor becomes the variant picker container
+   *
+   * PROCESS:
+   * - Iteratively climb DOM parents from each leaf
+   * - Track convergence points
+   * - Detect the lowest ancestor that contains all leaf nodes
+   *
+   * SPECIAL HANDLING:
+   * - Multi-option products:
+   *   Option wrappers are inferred as direct children of the picker
+   * - Single-option products:
+   *   Structure is flattened and adjusted heuristically
+   *
+   * OUTPUT:
+   * - variantPicker: the inferred container element
+   * - option_wrappers: DOM nodes representing option axes
+   *
+   * FAILURE MODE:
+   * Returns null if no stable ancestor convergence is found.
+   */
+
   if (!Array.isArray(leafNodeSelectorsArr) || !leafNodeSelectorsArr.length) {
     return null;
   }
@@ -781,6 +818,37 @@ function createLeafNodeSelectorSets(
   reduced_ova_array,
   optionCount
 ) {
+  /** DESCRIPTION:
+   * Generates coherent sets of leaf DOM nodes that represent
+   * one possible instantiation of a variant picker.
+   *
+   * MENTAL MODEL:
+   * Each option axis may be encoded using the same attribute
+   * (e.g. data-value) but multiple elements may match.
+   *
+   * This function constructs selector combinations such that:
+   * - Each option axis contributes exactly one leaf node
+   * - No two axes reuse the same DOM element
+   *
+   * PROCESS:
+   * - Iterate over each viable option-value attribute
+   * - For that attribute:
+   *   • Select one DOM node per option axis
+   *   • Ensure uniqueness via index tracking
+   *
+   * WHY THIS EXISTS:
+   * Variant pickers often reuse attributes across axes.
+   * We must explore valid combinations without collisions.
+   *
+   * OUTPUT:
+   * - An array of selector sets
+   *   Each set is a candidate “leaf representation” of a variant picker
+   *
+   * CRITICAL INVARIANT:
+   * Each returned set can theoretically represent a real variant picker.
+   * Invalid combinations are filtered later.
+   */
+
   // console.log({ rawSetectorKeys: selectorKeys, reduced_ova_array });
   let variantPickerKeySets = [];
 
@@ -815,6 +883,41 @@ function makeOVAKeysforOptionAxes(
   optionValueRack,
   OPTION_VALUE_ATTRIBUTES
 ) {
+  /** DESCRIPTION:
+   * Constructs attribute-based selector keys for each option axis
+   * using known product option values.
+   *
+   * MENTAL MODEL:
+   * We already know the truth from product JSON:
+   *   → option axes exist
+   *   → option values are real
+   *
+   * This function asks:
+   *   “Where in the DOM do these option values appear,
+   *    and through which attributes?”
+   *
+   * PROCESS:
+   * - For each option value:
+   *   • Probe the searchNode for elements carrying that value
+   *     via known OPTION_VALUE_ATTRIBUTES (data-*, aria-*, etc.)
+   * - Record which attributes actually yield matches
+   * - Gradually reduce the attribute set to only productive ones
+   *
+   * WHY THIS EXISTS:
+   * DOM structure is unreliable across Shopify themes.
+   * Attribute-value relationships are more semantically stable.
+   *
+   * OUTPUT:
+   * - selectorKeys:
+   *   One object per option axis, mapping attributes → matching elements
+   * - reduced_ova_array:
+   *   The minimal set of attributes that actually yielded selectors
+   *
+   * IMPORTANT GUARANTEE:
+   * Returned attributes are empirically verified to encode option values.
+   * Everything downstream relies on this fact.
+   */
+
   let reduced_ova_array = OPTION_VALUE_ATTRIBUTES;
   let temp_ova_set = new Set();
   let selectorKeys = [];
@@ -858,6 +961,88 @@ function makeOVAKeysforOptionAxes(
 }
 
 function getVariantPickersByRevCon(searchNode, product) {
+  /** DESCRIPTION:
+   * Discovers candidate variant pickers via reverse construction.
+   *
+   * CORE STRATEGY:
+   * Instead of searching for known variant picker patterns,
+   * we:
+   *   1. Start from known option values (product truth)
+   *   2. Discover where they appear in the DOM
+   *   3. Reconstruct structure upward
+   *
+   * ------------------------------------------------------------
+   * OPTION VALUE RACK (CRITICAL CONCEPT)
+   * ------------------------------------------------------------
+   *
+   * optionValueRack represents the *probe values* used to locate
+   * option axes in the DOM.
+   *
+   * These are NOT exhaustive option values.
+   * They are *representative* values chosen to reverse-map structure.
+   *
+   * Case 1: optionCount > 1 (multi-axis product)
+   * ------------------------------------------------
+   * product.options = [
+   *   { name: "Color", values: ["Red", "Blue"] },
+   *   { name: "Size",  values: ["S", "M", "L"] }
+   * ]
+   *
+   * optionValueRack becomes:
+   *   ["Red", "S"]
+   *
+   * RATIONALE:
+   * - One value per option axis is sufficient to detect structure
+   * - Reduces combinatorial explosion
+   * - Structural mapping does not require all values
+   *
+   * Each value acts as an axis "beacon" in the DOM.
+   *
+   * ------------------------------------------------
+   * Case 2: optionCount === 1 (single-axis product)
+   * ------------------------------------------------
+   * product.options = [
+   *   { name: "Size", values: ["S", "M", "L"] }
+   * ]
+   *
+   * optionValueRack becomes:
+   *   ["S", "M", "L"]
+   *
+   * RATIONALE:
+   * - Single-axis products encode all values in one wrapper
+   * - We must probe *all* values to extract selector sets
+   *
+   * ------------------------------------------------------------
+   *
+   * PIPELINE:
+   * - Build optionValueRack from product JSON
+   * - Extract attribute-based selector keys using known attributes
+   * - Generate leaf selector combinations
+   * - Reconstruct variant picker candidates via ancestor convergence
+   *
+   * ADAPTIVE LOGIC:
+   * - If not all option axes are detected:
+   *   • Reduce problem scope
+   *   • Retry with partial axes
+   *
+   * FAILURE SIGNAL:
+   * Returns null when:
+   * - No attribute convergence occurs
+   * - Attribute search space remains unfiltered
+   *
+   * OUTPUT:
+   * - variantPickerSet:
+   *   Candidate variant picker structures
+   * - OPTION_VALUE_ATTRIBUTES:
+   *   Reduced attribute set that yielded matches
+   * - optionValueRack, optionCount
+   *
+   * ROLE IN SYSTEM:
+   * This function does NOT validate correctness.
+   * It only proposes plausible candidates.
+   * Validation happens downstream.
+   */
+
   let OPTION_VALUE_ATTRIBUTES = [
     // Tier 1 — high-confidence, canonical
     "value",
@@ -916,6 +1101,52 @@ function getVariantPickersByRevCon(searchNode, product) {
       Pivot: "Remaking the selectorKeys for the populated Option Axes...",
       populatedSelectorKeys,
     });
+
+    /** RATIONALE FOR AXIS REDUCTION
+     * AXIS REDUCTION — WHY THIS IS SAFE AND NECESSARY
+     *
+     * CONTEXT:
+     * At this point, not all option axes were detected in the DOM.
+     * This does NOT immediately mean failure.
+     *
+     * WHY AXES MAY BE MISSING:
+     * - Themes may hide secondary option axes
+     * - Some axes may have a single value and be visually suppressed
+     * - Variant pickers may be progressively revealed via JS
+     *
+     * CORE INSIGHT:
+     * Variant picker *structure* can be inferred from a subset of axes.
+     *
+     * Structural truth ≠ Exhaustive value coverage
+     *
+     * STRATEGY:
+     * - Identify which option axes successfully yielded selectors
+     * - Reduce the problem space to only those axes
+     * - Re-run reverse construction using the reduced axis set
+     *
+     * CASES:
+     * 1) Only one axis detected:
+     *    → Treat as single-option product
+     *    → Use all values from that axis
+     *
+     * 2) Multiple axes detected:
+     *    → Use one representative value per detected axis
+     *
+     * WHY THIS WORKS:
+     * - DOM structure (parents, wrappers, containers) is shared
+     *   across all option axes
+     * - Missing axes rarely introduce new containers
+     * - Structural convergence remains stable
+     *
+     * FAILURE GUARANTEE:
+     * If reduced-axis reconstruction is incorrect,
+     * downstream validation (1:1 mapping & selector checks)
+     * will reject the candidate.
+     *
+     * In other words:
+     * Axis reduction increases recall,
+     * validation preserves precision.
+     */
 
     let matchedAxisIndices = populatedSelectorKeys.map((psk) => psk.index);
     if (matchedAxisIndices.length === 1) {
@@ -1121,14 +1352,3 @@ async function test(getFullData = false) {
 }
 
 await test();
-
-// [BUG ALERT] : Currently, isValidVariantPicker() would give strange results if more than one, but not all
-// option_wrappers in the vp_candidate map 1:1 with the option axis.
-
-// [BUT ALERT] : Sometimes, you may not find as many disguised option_wrappers as optionCount. (Easier to handle).
-
-// 3. Also, instead of option values, variantIds are used in the data-* values of the selectors. How would you tackle that issue ? https://innovadiscgolfcanada.ca/products/wombat3-proto-glow-champion
-
-// [OPTIONAL] : 3rd Party Variant-pickers
-// [OPTIMIZATION STRATEGY] : Should we look for fs_cand directly instead of variant pickers ?
-//    We might save ourselves from structural validation.

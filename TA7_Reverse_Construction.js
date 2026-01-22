@@ -152,19 +152,15 @@ function getCorrectVariantPickerWithSelectors(
   optionsInJSON,
   vp_validation_data
 ) {
-  let { optionExtractionKeys, dataValuesMatched, matchedAttributes } =
-    generateOptionExtractionKeys(
-      vp_candidate,
-      optionCount,
-      optionValueRack,
-      optionsInJSON,
-      vp_validation_data
-    );
+  let optionExtractionKeys = generateOptionExtractionKeys(
+    vp_candidate,
+    optionCount,
+    optionValueRack,
+    optionsInJSON,
+    vp_validation_data
+  );
 
-  let finalSelectorResult = {
-    dataValuesMatched,
-    matchedAttributes,
-  };
+  let finalSelectorResult = {};
 
   // verifying option extraction key generation
   let optionExtKeyGenSuccess = false;
@@ -212,9 +208,7 @@ function generateOptionExtractionKeys(
   optionsInJSON,
   vp_validation_data
 ) {
-  let matchedAttributes = new Set();
   let selectors = new Set();
-  let dataValuesMatched = new Set();
   let optionExtractionKeys = []; // used for selector assortment as per data-* value
 
   if (optionCount > 1) {
@@ -242,9 +236,7 @@ function generateOptionExtractionKeys(
           )}"]`;
           const dataValueFound = fs_cand.querySelector(attributeSelector);
           if (dataValueFound) {
-            matchedAttributes.add(ov_attribute);
             selectors.add(dataValueFound);
-            dataValuesMatched.add(attributeSelector);
             // break;
 
             optionExtKey.ov_attribute.push(ov_attribute);
@@ -278,9 +270,7 @@ function generateOptionExtractionKeys(
         )}"]`;
         const dataValueFound = fs_cand.querySelector(attributeSelector);
         if (dataValueFound) {
-          matchedAttributes.add(ov_attribute);
           selectors.add(dataValueFound);
-          dataValuesMatched.add(attributeSelector);
           // break;
           optionExtKey.fs_cand = fs_cand;
           optionExtKey.ov_attribute.push(ov_attribute);
@@ -289,15 +279,7 @@ function generateOptionExtractionKeys(
     }
     if (optionExtKey.fs_cand) optionExtractionKeys.push(optionExtKey);
   }
-
-  // finalizing the selectorResult for both optionCounts (1 and >1)
-  let optionExtractionKeyData = {
-    optionExtractionKeys,
-    dataValuesMatched,
-    matchedAttributes,
-  };
-
-  return optionExtractionKeyData;
+  return optionExtractionKeys;
 }
 
 function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
@@ -396,7 +378,10 @@ function extractFinalSelectors(selector_set) {
     // phase 1: only one candidate → accept without testing
     if (entries.length === 1) {
       const [[attribute_name, selectors]] = entries;
-      extractedSelectorData.push({ value_attribute:attribute_name, selectors });
+      extractedSelectorData.push({
+        value_attribute: attribute_name,
+        selectors,
+      });
       continue;
     }
 
@@ -749,7 +734,6 @@ function isNumericString(value) {
 }
 
 function createVariantPicker(leafNodeSelectorsArr, optionCount) {
-  
   // DESCRIPTION:
   /**: #region
    * Reconstructs a variant picker container from leaf selector nodes.
@@ -1231,11 +1215,11 @@ function getVariantPickersByRevCon(searchNode, product) {
 async function test(getFullData = false) {
   let targetData = {
     A__finalVariantPicker: null, //finalVariantPickerTest,
-    D__parentNodeForVPCSearch: null, // {
+    B__parentNodeForVPCSearch: null, // {
     //  searchNode : candidateObject.parent,
     //  parentFoundInAnchorMode
     // }
-    E__anchorData: null, //{
+    C__anchorData: null, //{
     //   nameIdElement: anchorProductFormData.validNameIdElement,
     //   anchorProductForm,
     // },
@@ -1267,7 +1251,12 @@ async function test(getFullData = false) {
   );
 
   // Find a stable parent,
-  let anchorHook = anchorProductForm || anchorProductFormData.nameIdAnchors[0];
+  let anchorHook =
+    anchorProductForm ||
+    anchorProductFormData.nameIdAnchors.find((anchor) =>
+      isElementVisible(anchor.parentElement)
+    );
+
   let candidateObject;
   if (anchorHook === anchorProductForm)
     candidateObject = getParentNodeForVPCSearch(anchorHook, null, false);
@@ -1323,11 +1312,6 @@ async function test(getFullData = false) {
 
       if (finalSelectorResult) {
         item.selectors = finalSelectorResult.selector_data;
-        item.selectorMetaData = {
-          dataValuesMatched: finalSelectorResult.dataValuesMatched,
-          matchedAttributes: finalSelectorResult.matchedAttributes,
-          selector_set: finalSelectorResult.selector_set,
-        };
         finalVariantPicker = item;
         break;
       }
@@ -1343,13 +1327,20 @@ async function test(getFullData = false) {
     finalVariantPicker.camouflage_selectors =
       window.CAMOUFLAGEE.items[0].selectors;
 
+  // Final normalization of the Variant Picker:
+
   if (finalVariantPicker) {
+    let option_wrappers_with_selectors = finalVariantPicker.option_wrappers.map((ow, index) => {
+      return {
+        option_wrapper: ow,
+        selectors: finalVariantPicker.selectors[index],
+      }
+    })
+
     finalVariantPicker = {
-      a__variantPicker: finalVariantPicker.variantPicker,
-      b__option_wrappers: finalVariantPicker.option_wrappers,
-      c__selectors: finalVariantPicker.selectors,
-      d__selector_meta_data: finalVariantPicker.selectorMetaData,
-      e__camouflage_selectors:
+      variantPicker: finalVariantPicker.variantPicker,
+      option_wrappers_with_selectors,
+      z__camouflage_selectors:
         finalVariantPicker.camouflage_selectors ||
         "Camouflage not enabled on store",
     };

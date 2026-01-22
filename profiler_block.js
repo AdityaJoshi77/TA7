@@ -1,4 +1,3 @@
-
 // HELPER:
 // Find the theme invariant - input/select with name = id.
 // Most shopify themes need an html element which will hold the id of the current variant
@@ -145,10 +144,7 @@ function getCorrectVariantPickerWithSelectors(
       vp_validation_data
     );
 
-  let finalSelectorResult = {
-    dataValuesMatched,
-    matchedAttributes,
-  };
+  let finalSelectorResult = {};
 
   // verifying option extraction key generation
   let optionExtKeyGenSuccess = false;
@@ -1133,8 +1129,6 @@ await test();
 // [OPTIONAL] : 3rd Party Variant-pickers
 // [OPTIMIZATION STRATEGY] : Should we look for fs_cand directly instead of variant pickers ?
 //    We might save ourselves from structural validation.
-
-
 
 (async function TA7_Performance_Profile() {
   const PERF = {};

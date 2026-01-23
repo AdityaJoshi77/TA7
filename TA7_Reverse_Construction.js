@@ -212,7 +212,6 @@ function generateOptionExtractionKeys(
   optionsInJSON,
   vp_validation_data
 ) {
-  let selectors = new Set();
   let optionExtractionKeys = []; // used for selector assortment as per data-* value
 
   if (optionCount > 1) {
@@ -240,9 +239,6 @@ function generateOptionExtractionKeys(
           )}"]`;
           const dataValueFound = fs_cand.querySelector(attributeSelector);
           if (dataValueFound) {
-            selectors.add(dataValueFound);
-            // break;
-
             optionExtKey.ov_attribute.push(ov_attribute);
             optionExtKey.fs_cand = fs_cand;
           }
@@ -274,8 +270,6 @@ function generateOptionExtractionKeys(
         )}"]`;
         const dataValueFound = fs_cand.querySelector(attributeSelector);
         if (dataValueFound) {
-          selectors.add(dataValueFound);
-          // break;
           optionExtKey.fs_cand = fs_cand;
           optionExtKey.ov_attribute.push(ov_attribute);
         }
@@ -1234,7 +1228,7 @@ async function test(getFullData = false) {
 
   // Failure to find the anchorProductForm
   // INFERENCE: Our fundamental assumptions are violated by the theme. (Absolute Failure)
-  if (!anchorProductForm && !anchorProductFormData.nameIdAnchors) {
+  if (!anchorProductForm && !anchorProductFormData.nameIdAnchors.length) {
     console.error({
       status: "[TA7] Failed",
       cause: "variantID anchorForm not found",

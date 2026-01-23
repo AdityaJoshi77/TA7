@@ -1222,7 +1222,7 @@ async function test(getFullData = false) {
   const anchorProductFormData = findAnchorProductForm();
 
   const anchorProductForm = anchorProductFormData.anchorProductForm;
-  targetData.E__anchorData = {
+  targetData.C__anchorData = {
     nameIdElement: anchorProductFormData.validNameIdElement,
     anchorProductForm,
     nameIdAnchors: anchorProductFormData.nameIdAnchors,
@@ -1257,7 +1257,7 @@ async function test(getFullData = false) {
   else candidateObject = getParentNodeForVPCSearch(anchorHook, 5, false);
   let parentFoundInAnchorMode = true;
 
-  targetData.D__parentNodeForVPCSearch = {
+  targetData.B__parentNodeForVPCSearch = {
     searchNode: candidateObject.parent,
     parentFoundInAnchorMode,
   };

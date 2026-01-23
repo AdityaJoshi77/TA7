@@ -1315,6 +1315,7 @@ async function test(getFullData = false) {
         return {
           option_wrapper: ow,
           selectors: finalVariantPicker.selectors[index],
+          value_attribute: finalVariantPicker.selectors[index].value_attribute,
         };
       }
     );

@@ -4,13 +4,34 @@
 // for the add-to-cart / buy form submission.
 // If this is found, we proceed ahead, if not, we revert to manual extraction.
 function findAnchorProductForm() {
+  /** DESCRIPTION:
+   * Attempts to locate the product form that controls variant selection.
+   *
+   * WHY THIS EXISTS:
+   * Most Shopify themes submit variant changes via an element named "id".
+   * This function finds that anchor and walks upward to identify the
+   * enclosing product form using regex heuristics.
+   *
+   * RETURNS:
+   * - validNameIdElement: the actual input/select[name="id"]
+   * - anchorProductForm: closest visible ancestor matching product form intent
+   * - nameIdAnchors: all discovered variant ID anchors
+   *
+   * FAILURE MODE:
+   * Returns null anchorProductForm when themes violate assumptions.
+   */
+
   const anchors = Array.from(
     document.querySelectorAll('input[name="id"], select[name="id"]')
   );
 
   if (!anchors.length) {
     console.log("No anchors were found, revert to manual extraction");
-    return null;
+    return {
+      validNameIdElement: null,
+      anchorProductForm: null,
+      nameIdAnchors: [],
+    };
   }
 
   const productFormRegex = /product[-_]*.*[-_]*form/i;
@@ -135,14 +156,13 @@ function getCorrectVariantPickerWithSelectors(
   optionsInJSON,
   vp_validation_data
 ) {
-  let { optionExtractionKeys, dataValuesMatched, matchedAttributes } =
-    generateOptionExtractionKeys(
-      vp_candidate,
-      optionCount,
-      optionValueRack,
-      optionsInJSON,
-      vp_validation_data
-    );
+  let optionExtractionKeys = generateOptionExtractionKeys(
+    vp_candidate,
+    optionCount,
+    optionValueRack,
+    optionsInJSON,
+    vp_validation_data
+  );
 
   let finalSelectorResult = {};
 
@@ -156,7 +176,7 @@ function getCorrectVariantPickerWithSelectors(
   }
 
   if (!optionExtKeyGenSuccess) {
-    console.log({
+    console.warn({
       option_extraction_status: "[Failure]",
       optionExtractionKeys,
     });
@@ -192,17 +212,12 @@ function generateOptionExtractionKeys(
   optionsInJSON,
   vp_validation_data
 ) {
-  let matchedAttributes = new Set();
-  let selectors = new Set();
-  let dataValuesMatched = new Set();
   let optionExtractionKeys = []; // used for selector assortment as per data-* value
 
   if (optionCount > 1) {
     let reducedOptionValueRackIndices = vp_validation_data.fieldSetMap.filter(
       (index) => index !== -1
     );
-
-    console.log({ vp_validation_data });
 
     // for (let optionValueIndex in optionValueRack)
     for (let optionValueIndex of reducedOptionValueRackIndices) {
@@ -218,23 +233,12 @@ function generateOptionExtractionKeys(
         let matching_ova_inFsCand =
           vp_validation_data.selector_yielding_ova_perFsCand[fs_cand_index];
 
-        console.log({
-          Control_Function: "generateOptionExtractionKeys",
-          fs_cand_index,
-          matching_ova_inFsCand,
-        });
-
         for (let ov_attribute of matching_ova_inFsCand) {
           const attributeSelector = `[${ov_attribute}="${CSS.escape(
             optionValueRack[optionValueIndex]
           )}"]`;
           const dataValueFound = fs_cand.querySelector(attributeSelector);
           if (dataValueFound) {
-            matchedAttributes.add(ov_attribute);
-            selectors.add(dataValueFound);
-            dataValuesMatched.add(attributeSelector);
-            // break;
-
             optionExtKey.ov_attribute.push(ov_attribute);
             optionExtKey.fs_cand = fs_cand;
           }
@@ -266,10 +270,6 @@ function generateOptionExtractionKeys(
         )}"]`;
         const dataValueFound = fs_cand.querySelector(attributeSelector);
         if (dataValueFound) {
-          matchedAttributes.add(ov_attribute);
-          selectors.add(dataValueFound);
-          dataValuesMatched.add(attributeSelector);
-          // break;
           optionExtKey.fs_cand = fs_cand;
           optionExtKey.ov_attribute.push(ov_attribute);
         }
@@ -277,15 +277,7 @@ function generateOptionExtractionKeys(
     }
     if (optionExtKey.fs_cand) optionExtractionKeys.push(optionExtKey);
   }
-
-  // finalizing the selectorResult for both optionCounts (1 and >1)
-  let optionExtractionKeyData = {
-    optionExtractionKeys,
-    dataValuesMatched,
-    matchedAttributes,
-  };
-
-  return optionExtractionKeyData;
+  return optionExtractionKeys;
 }
 
 function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
@@ -362,12 +354,21 @@ function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
 // HELPER:
 // Checks the selectors' validity :
 function extractFinalSelectors(selector_set) {
-  let extractedSelectorData = [];
+  /** DESCRIPTION:
+   * Resolves the final selector set for each option axis.
+   *
+   * STRATEGY:
+   * - If only one candidate → accept immediately
+   * - If multiple candidates:
+   *   • Prefer visible selector sets
+   *   • Break ties via semantic tag priority
+   *
+   * WHY TAG PRIORITY EXISTS:
+   * Inputs/options/buttons encode stronger user intent
+   * than generic containers like div or li.
+   */
 
-  // console.log({
-  //   Control_Function: "In extractFinalSelectors()",
-  //   selector_set,
-  // });
+  let extractedSelectorData = [];
 
   for (const optionAxisObject of selector_set) {
     const entries = Object.entries(optionAxisObject);
@@ -375,7 +376,10 @@ function extractFinalSelectors(selector_set) {
     // phase 1: only one candidate → accept without testing
     if (entries.length === 1) {
       const [[attribute_name, selectors]] = entries;
-      extractedSelectorData.push({ attribute_name, selectors });
+      extractedSelectorData.push({
+        value_attribute: attribute_name,
+        selectors,
+      });
       continue;
     }
 
@@ -387,9 +391,9 @@ function extractFinalSelectors(selector_set) {
 
     for (const [ov_attribute, selectors] of entries) {
       isSelectorSetVisible = selectors.some(
-        (selector) =>
-          // isElementVisible(selector) // should we look at the visibility of the selector,
-          isElementVisible(selector.parentElement) // or at the visibility of the selector's immediate parent ? ,
+        (selector) => isElementVisible(selector.parentElement)
+        // We check the parent element's visibility to account for cases
+        // where the selector itself might be hidden but its parent is visible.
       );
 
       if (isSelectorSetVisible) {
@@ -399,40 +403,22 @@ function extractFinalSelectors(selector_set) {
       }
     }
 
-    // phase 3 : all candidates hidden ? -> go for the best one as per heuristic
-    // console.log({
-    //   visibleSelectorSet,
-    //   invisibleSelectorSet,
-    // });
-
+    // phase 2.1 : you have visible selector sets, choose from these only
+    // if there are multiplse visible selector sets, choose the best one
     if (visibleSelectorSet.length) {
       if (visibleSelectorSet.length === 1) {
         finalSelectorSet = visibleSelectorSet[0];
       } else {
         finalSelectorSet = returnBestSelectorSet(visibleSelectorSet);
-        // console.log({
-        //   Best_Selector_Set: finalSelectorSet,
-        // });
       }
-    } else {
+    }
+    // phase 2.2 : all selector sets are invisible, choose the best one
+    else {
       finalSelectorSet = returnBestSelectorSet(invisibleSelectorSet);
     }
 
-    if (!finalSelectorSet) {
-      console.warn({
-        Control_Function: "extractFinalSelectors()",
-        Status: "[Failure] : Could not extract selectors for the option axis",
-        optionAxisObject,
-      });
-      continue;
-    }
-
-    // console.log({
-    //   finalSelectorSet,
-    // });
-
     finalSelectorSet = {
-      attribute_name: finalSelectorSet.ov_attribute,
+      value_attribute: finalSelectorSet.ov_attribute,
       selectors: finalSelectorSet.selectors,
     };
 
@@ -443,6 +429,21 @@ function extractFinalSelectors(selector_set) {
 }
 
 function returnBestSelectorSet(selectorSetArray) {
+  /** DESCRIPTION:
+   * If you get multiple selector sets for an option axis,
+   * this function selects the best one based on tag priority.
+   *
+   * STRATEGY:
+   * - Define a priority list of HTML tags
+   * - Evaluate each selector set's representative tag
+   * - Select the set with the highest priority tag
+   *
+   * WHY THIS MATTERS:
+   * Some themes use multiple hidden elements
+   * to encode the same option values.
+   * This heuristic helps pick the most semantically relevant one.
+   *
+   **/
   let selectorPriorityList_flat = [
     "input",
     "option",
@@ -452,7 +453,6 @@ function returnBestSelectorSet(selectorSetArray) {
     "div",
     "label",
   ];
-  // Use a 1D array instead.
 
   let selectorCandidatesList = selectorSetArray.map((selectorSet, index) => {
     return {
@@ -476,21 +476,7 @@ function returnBestSelectorSet(selectorSetArray) {
     return curr.selProListIndex < best.selProListIndex ? curr : best;
   });
 
-  // SEND WARNING MESSAGE:
-  console.warn({
-    Control_Function: "returnBestSelectorSet()",
-    Error:
-      "fs_cand for option axis had multiple selector set, All hidden, returning the best one",
-    selectorSetArray,
-    selectorCandidatesList,
-    bestSelectorSet,
-  });
-
-  if (bestSelectorSet) {
-    return selectorSetArray[bestSelectorSet.inSelSetIndex];
-  }
-
-  return null;
+  return selectorSetArray[bestSelectorSet.inSelSetIndex];
 }
 
 // HELPER:
@@ -511,6 +497,23 @@ function isValidVariantPicker(
   optionValuesRack,
   OPTION_VALUE_ATTRIBUTES
 ) {
+  /** DESCRIPTION:
+   * Validates whether a candidate variant picker is legitimate.
+   *
+   * VALIDATION CRITERIA:
+   * 1. At least one option wrapper must be visible
+   * 2. Option wrappers must map 1:1 with option axes
+   * 3. Each wrapper must yield selectors for real option values
+   *
+   * SPECIAL CASES:
+   * - Single-option products relax 1:1 constraints
+   * - Numeric option values allow limited ambiguity
+   *
+   * RETURNS:
+   * - vp_validation_data on success
+   * - null on failure
+   */
+
   // CHECK 1 : if none of the fs_cand in the vpc are visually present, return null
   // WHY NOT ENFORCE THE VISIBILITY OF ALL THE FS_CANDs ?
   // Sometimes, the secondary option axes are hidden by the theme if they have only one option value.
@@ -555,10 +558,6 @@ function isValidVariantPicker(
       return [];
     }
   );
-  // console.warn({
-  //   ov_attributes_filtered_per_fsCand,
-  //   vp_candidate,
-  // });
 
   // If you don't get OVA's for any fs_cand of a vp_candidate, its invalid
   // Our regex and structure validation logic sometimes return the valid fs_cand
@@ -593,9 +592,6 @@ function isValidVariantPicker(
 
     if (selectorYieldingOVAList.length > 0) {
       selector_yielding_ova_perFsCand.push(selectorYieldingOVAList);
-      // console.log({
-      //   selector_yielding_ova_perFsCand,
-      // });
       return {
         selector_yielding_ova_perFsCand,
         fieldSet: vp_candidate.option_wrappers[0],
@@ -613,7 +609,7 @@ function isValidVariantPicker(
   let fieldSetMap = new Array(optionCount).fill(-1);
   let fs_candidates = vp_candidate.option_wrappers;
   let one2oneMappingDetected = false;
-  // for (let fs_cand_index of visually_present_fs_cand_indices) {
+
   for (
     let fs_cand_index = 0;
     fs_cand_index < vp_candidate.option_wrappers.length;
@@ -665,39 +661,61 @@ function isValidVariantPicker(
   // If no fs_cand was 1:1 mapped with the option axes
   // return null
   if (!one2oneMappingDetected) {
+    console.warn({
+      Control_Function: "isValidVariantPicker()",
+      message: "No 1:1 mapping detected",
+      vp_candidate,
+    });
     return null;
   } // else :
 
-  let vp_validation_data = null;
-  vp_validation_data = {
+  let vp_validation_data = {
     selector_yielding_ova_perFsCand,
     fieldSetMap,
-    disguisedOptionWrapper: false,
+    // disguisedOptionWrapper: false,
   };
+
+  return vp_validation_data;
 
   // we are checking for the count of those fs_cand that couldn't be
   // 1:1 mapped to any option axis.
-  let mappedFscandCount = fieldSetMap.filter((v) => v !== -1).length;
 
+  /*
+  let mappedFscandCount = fieldSetMap.filter((v) => v !== -1).length;
+  */
   // At this moment, it is implicit that the optionCount was > 1
   // So if despite optionCount > 1, we have only a single 1:1 mapping
   // It can mean only one thing :
   // We have an option_wrapper disguised as the variant picker.
-  if (mappedFscandCount > 1) return vp_validation_data;
+
+  /*
+   if (mappedFscandCount > 1) return vp_validation_data;
+    console.warn({
+      Control_Function: "isValidVariantPicker()",
+      message: "Disguised Option wrapper",
+      vp_candidate,
+    });
+  */
+
+  /*
+  return null;
+  */
 
   // if the vp_candidate is a disguised option_wrapper,
   // we attach a disguisedOptionWrapper Boolean flag to the vp_validation_data
   // to let the test() function adjust accordingly.
-  vp_validation_data.disguisedOptionWrapper = true;
-  vp_validation_data.matchingOptionAxisIndex = fieldSetMap.find(
-    (value) => value > -1
-  );
-  vp_validation_data.trueFsCand =
+  /**
+   vp_validation_data.disguisedOptionWrapper = true;
+    vp_validation_data.matchingOptionAxisIndex = fieldSetMap.find(
+      (value) => value > -1
+    );
+    vp_validation_data.trueFsCand =
     vp_candidate.option_wrappers[fieldSetMap.findIndex((v) => v !== -1)];
-  vp_validation_data.selector_yielding_ova_perFsCand =
-    selector_yielding_ova_perFsCand.filter((array) => array.length);
+    vp_validation_data.selector_yielding_ova_perFsCand =
+      selector_yielding_ova_perFsCand.filter((array) => array.length);
 
-  return vp_validation_data;
+    return vp_validation_data;
+  */
 
   // ONE CAVEAT:
   // At this stage, the function can detect only those disguised vp_candidates
@@ -714,6 +732,38 @@ function isNumericString(value) {
 }
 
 function createVariantPicker(leafNodeSelectorsArr, optionCount) {
+  // DESCRIPTION:
+  /**: #region
+   * Reconstructs a variant picker container from leaf selector nodes.
+   *
+   * MENTAL MODEL:
+   * If multiple option elements belong to the same variant picker,
+   * they must converge at a common ancestor.
+   *
+   * This function climbs upward from leaf nodes to find:
+   * - The lowest common ancestor (LCA)
+   * - That ancestor becomes the variant picker container
+   *
+   * PROCESS:
+   * - Iteratively climb DOM parents from each leaf
+   * - Track convergence points
+   * - Detect the lowest ancestor that contains all leaf nodes
+   *
+   * SPECIAL HANDLING:
+   * - Multi-option products:
+   *   Option wrappers are inferred as direct children of the picker
+   * - Single-option products:
+   *   Structure is flattened and adjusted heuristically
+   *
+   * OUTPUT:
+   * - variantPicker: the inferred container element
+   * - option_wrappers: DOM nodes representing option axes
+   *
+   * FAILURE MODE:
+   * Returns null if no stable ancestor convergence is found.
+   */
+  // #endregion
+
   if (!Array.isArray(leafNodeSelectorsArr) || !leafNodeSelectorsArr.length) {
     return null;
   }
@@ -744,9 +794,13 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
     // collect parents of option wrappers
     const parentSet = new Set(tempParents.map((el) => el.parentElement));
 
+    // check if you get some parent in the parentSet which contains all the flagSelectors
     let LCA = Array.from(parentSet).find((parent) =>
       flagSelectors.every((flag) => parent.contains(flag))
     );
+
+    // This LCA is that node, running querySelectorAll on which
+    // can yield all the leafNodeSelectorsArr elements.
 
     // lowest common ancestor found
     if (LCA) {
@@ -778,6 +832,37 @@ function createLeafNodeSelectorSets(
   reduced_ova_array,
   optionCount
 ) {
+  /** DESCRIPTION:
+   * Generates coherent sets of leaf DOM nodes that represent
+   * one possible instantiation of a variant picker.
+   *
+   * MENTAL MODEL:
+   * Each option axis may be encoded using the same attribute
+   * (e.g. data-value) but multiple elements may match.
+   *
+   * This function constructs selector combinations such that:
+   * - Each option axis contributes exactly one leaf node
+   * - No two axes reuse the same DOM element
+   *
+   * PROCESS:
+   * - Iterate over each viable option-value attribute
+   * - For that attribute:
+   *   • Select one DOM node per option axis
+   *   • Ensure uniqueness via index tracking
+   *
+   * WHY THIS EXISTS:
+   * Variant pickers often reuse attributes across axes.
+   * We must explore valid combinations without collisions.
+   *
+   * OUTPUT:
+   * - An array of selector sets
+   *   Each set is a candidate “leaf representation” of a variant picker
+   *
+   * CRITICAL INVARIANT:
+   * Each returned set can theoretically represent a real variant picker.
+   * Invalid combinations are filtered later.
+   */
+
   // console.log({ rawSetectorKeys: selectorKeys, reduced_ova_array });
   let variantPickerKeySets = [];
 
@@ -812,6 +897,41 @@ function makeOVAKeysforOptionAxes(
   optionValueRack,
   OPTION_VALUE_ATTRIBUTES
 ) {
+  /** DESCRIPTION:
+   * Constructs attribute-based selector keys for each option axis
+   * using known product option values.
+   *
+   * MENTAL MODEL:
+   * We already know the truth from product JSON:
+   *   → option axes exist
+   *   → option values are real
+   *
+   * This function asks:
+   *   “Where in the DOM do these option values appear,
+   *    and through which attributes?”
+   *
+   * PROCESS:
+   * - For each option value:
+   *   • Probe the searchNode for elements carrying that value
+   *     via known OPTION_VALUE_ATTRIBUTES (data-*, aria-*, etc.)
+   * - Record which attributes actually yield matches
+   * - Gradually reduce the attribute set to only productive ones
+   *
+   * WHY THIS EXISTS:
+   * DOM structure is unreliable across Shopify themes.
+   * Attribute-value relationships are more semantically stable.
+   *
+   * OUTPUT:
+   * - selectorKeys:
+   *   One object per option axis, mapping attributes → matching elements
+   * - reduced_ova_array:
+   *   The minimal set of attributes that actually yielded selectors
+   *
+   * IMPORTANT GUARANTEE:
+   * Returned attributes are empirically verified to encode option values.
+   * Everything downstream relies on this fact.
+   */
+
   let reduced_ova_array = OPTION_VALUE_ATTRIBUTES;
   let temp_ova_set = new Set();
   let selectorKeys = [];
@@ -855,37 +975,107 @@ function makeOVAKeysforOptionAxes(
 }
 
 function getVariantPickersByRevCon(searchNode, product) {
+  /** DESCRIPTION:
+   * Discovers candidate variant pickers via reverse construction.
+   *
+   * CORE STRATEGY:
+   * Instead of searching for known variant picker patterns,
+   * we:
+   *   1. Start from known option values (product truth)
+   *   2. Discover where they appear in the DOM
+   *   3. Reconstruct structure upward
+   *
+   * ------------------------------------------------------------
+   * OPTION VALUE RACK (CRITICAL CONCEPT)
+   * ------------------------------------------------------------
+   *
+   * optionValueRack represents the *probe values* used to locate
+   * option axes in the DOM.
+   *
+   * These are NOT exhaustive option values.
+   * They are *representative* values chosen to reverse-map structure.
+   *
+   * Case 1: optionCount > 1 (multi-axis product)
+   * ------------------------------------------------
+   * product.options = [
+   *   { name: "Color", values: ["Red", "Blue"] },
+   *   { name: "Size",  values: ["S", "M", "L"] }
+   * ]
+   *
+   * optionValueRack becomes:
+   *   ["Red", "S"]
+   *
+   * RATIONALE:
+   * - One value per option axis is sufficient to detect structure
+   * - Reduces combinatorial explosion
+   * - Structural mapping does not require all values
+   *
+   * Each value acts as an axis "beacon" in the DOM.
+   *
+   * ------------------------------------------------
+   * Case 2: optionCount === 1 (single-axis product)
+   * ------------------------------------------------
+   * product.options = [
+   *   { name: "Size", values: ["S", "M", "L"] }
+   * ]
+   *
+   * optionValueRack becomes:
+   *   ["S", "M", "L"]
+   *
+   * RATIONALE:
+   * - Single-axis products encode all values in one wrapper
+   * - We must probe *all* values to extract selector sets
+   *
+   * ------------------------------------------------------------
+   *
+   * PIPELINE:
+   * - Build optionValueRack from product JSON
+   * - Extract attribute-based selector keys using known attributes
+   * - Generate leaf selector combinations
+   * - Reconstruct variant picker candidates via ancestor convergence
+   *
+   * ADAPTIVE LOGIC:
+   * - If not all option axes are detected:
+   *   • Reduce problem scope
+   *   • Retry with partial axes
+   *
+   * FAILURE SIGNAL:
+   * Returns null when:
+   * - No attribute convergence occurs
+   * - Attribute search space remains unfiltered
+   *
+   * OUTPUT:
+   * - variantPickerSet:
+   *   Candidate variant picker structures
+   * - OPTION_VALUE_ATTRIBUTES:
+   *   Reduced attribute set that yielded matches
+   * - optionValueRack, optionCount
+   *
+   * ROLE IN SYSTEM:
+   * This function does NOT validate correctness.
+   * It only proposes plausible candidates.
+   * Validation happens downstream.
+   */
+
   let OPTION_VALUE_ATTRIBUTES = [
-    // Tier 1 — high-confidence, canonical
     "value",
     "data-option-value",
-    "data-option-value-id",
-    "data-option-id",
     "data-value",
-    "data-value-id",
-    "data-variant-id",
     "data-variant",
     "data-selected-value",
-
-    // Tier 2 — handles / normalized keys
     "data-value-handle",
     "data-option-handle",
     "data-handle",
     "data-option-key",
     "data-key",
-
-    // Tier 3 — generic but meaningful
     "data-option",
     "data-option-index",
     "data-index",
     "data-name",
     "data-current-value",
-
-    // Tier 4 — accessibility / framework-driven
     "orig-value",
     "aria-label",
     "aria-valuetext",
-    // "name",
   ];
 
   // GET PRODUCT DATA
@@ -913,6 +1103,52 @@ function getVariantPickersByRevCon(searchNode, product) {
       Pivot: "Remaking the selectorKeys for the populated Option Axes...",
       populatedSelectorKeys,
     });
+
+    /** RATIONALE FOR AXIS REDUCTION
+     * AXIS REDUCTION — WHY THIS IS SAFE AND NECESSARY
+     *
+     * CONTEXT:
+     * At this point, not all option axes were detected in the DOM.
+     * This does NOT immediately mean failure.
+     *
+     * WHY AXES MAY BE MISSING:
+     * - Themes may hide secondary option axes
+     * - Some axes may have a single value and be visually suppressed
+     * - Variant pickers may be progressively revealed via JS
+     *
+     * CORE INSIGHT:
+     * Variant picker *structure* can be inferred from a subset of axes.
+     *
+     * Structural truth ≠ Exhaustive value coverage
+     *
+     * STRATEGY:
+     * - Identify which option axes successfully yielded selectors
+     * - Reduce the problem space to only those axes
+     * - Re-run reverse construction using the reduced axis set
+     *
+     * CASES:
+     * 1) Only one axis detected:
+     *    → Treat as single-option product
+     *    → Use all values from that axis
+     *
+     * 2) Multiple axes detected:
+     *    → Use one representative value per detected axis
+     *
+     * WHY THIS WORKS:
+     * - DOM structure (parents, wrappers, containers) is shared
+     *   across all option axes
+     * - Missing axes rarely introduce new containers
+     * - Structural convergence remains stable
+     *
+     * FAILURE GUARANTEE:
+     * If reduced-axis reconstruction is incorrect,
+     * downstream validation (1:1 mapping & selector checks)
+     * will reject the candidate.
+     *
+     * In other words:
+     * Axis reduction increases recall,
+     * validation preserves precision.
+     */
 
     let matchedAxisIndices = populatedSelectorKeys.map((psk) => psk.index);
     if (matchedAxisIndices.length === 1) {
@@ -964,21 +1200,15 @@ function getVariantPickersByRevCon(searchNode, product) {
 
 async function test(getFullData = false) {
   let targetData = {
-    A__finalVariantPicker: null, //finalVariantPickerTest,
-    D__parentNodeForVPCSearch: null, // {
-    //  searchNode : candidateObject.parent,
-    //  parentFoundInAnchorMode
-    // }
-    E__anchorData: null, //{
-    //   nameIdElement: anchorProductFormData.validNameIdElement,
-    //   anchorProductForm,
-    // },
+    A__finalVariantPicker: null,
+    B__parentNodeForVPCSearch: null,
+    C__anchorData: null,
   };
 
   const anchorProductFormData = findAnchorProductForm();
 
   const anchorProductForm = anchorProductFormData.anchorProductForm;
-  targetData.E__anchorData = {
+  targetData.C__anchorData = {
     nameIdElement: anchorProductFormData.validNameIdElement,
     anchorProductForm,
     nameIdAnchors: anchorProductFormData.nameIdAnchors,
@@ -986,7 +1216,7 @@ async function test(getFullData = false) {
 
   // Failure to find the anchorProductForm
   // INFERENCE: Our fundamental assumptions are violated by the theme. (Absolute Failure)
-  if (!anchorProductForm && !anchorProductFormData.nameIdAnchors) {
+  if (!anchorProductForm && !anchorProductFormData.nameIdAnchors.length) {
     console.error({
       status: "[TA7] Failed",
       cause: "variantID anchorForm not found",
@@ -1001,14 +1231,19 @@ async function test(getFullData = false) {
   );
 
   // Find a stable parent,
-  let anchorHook = anchorProductForm || anchorProductFormData.nameIdAnchors[0];
+  let anchorHook =
+    anchorProductForm ||
+    anchorProductFormData.nameIdAnchors.find((anchor) =>
+      isElementVisible(anchor.parentElement)
+    );
+
   let candidateObject;
   if (anchorHook === anchorProductForm)
     candidateObject = getParentNodeForVPCSearch(anchorHook, null, false);
   else candidateObject = getParentNodeForVPCSearch(anchorHook, 5, false);
   let parentFoundInAnchorMode = true;
 
-  targetData.D__parentNodeForVPCSearch = {
+  targetData.B__parentNodeForVPCSearch = {
     searchNode: candidateObject.parent,
     parentFoundInAnchorMode,
   };
@@ -1019,11 +1254,11 @@ async function test(getFullData = false) {
   );
 
   if (!variantPickerGenData) {
-    return {
-      "[TA7 VERDICT]": "Failure",
-      Failure: "No potential variant pickers found",
-      targetData,
-    };
+    console.error({
+      status: "[TA7] Failed",
+      cause: "No variant picker candidates found",
+    });
+    return null;
   }
 
   let {
@@ -1044,27 +1279,23 @@ async function test(getFullData = false) {
 
     // no 1:1 mapping in item : DISCARD and continue;
     if (!vp_validation_data) continue;
-    // true variant picker detected : success
-    else {
-      // OLD PIPELINE:
-      const finalSelectorResult = getCorrectVariantPickerWithSelectors(
-        item,
-        optionCount,
-        optionValueRack,
-        product.options,
-        vp_validation_data
-      );
 
-      if (finalSelectorResult) {
-        item.selectors = finalSelectorResult.selector_data;
-        item.selectorMetaData = {
-          dataValuesMatched: finalSelectorResult.dataValuesMatched,
-          matchedAttributes: finalSelectorResult.matchedAttributes,
-          selector_set: finalSelectorResult.selector_set,
-        };
-        finalVariantPicker = item;
-        break;
-      }
+    // true variant picker detected : success
+    const finalSelectorResult = getCorrectVariantPickerWithSelectors(
+      item,
+      optionCount,
+      optionValueRack,
+      product.options,
+      vp_validation_data
+    );
+
+    // testing purpose :
+    console.log({ vp_validation_data });
+
+    if (finalSelectorResult) {
+      item.selectors = finalSelectorResult.selector_data;
+      finalVariantPicker = item;
+      break;
     }
   }
 
@@ -1077,13 +1308,21 @@ async function test(getFullData = false) {
     finalVariantPicker.camouflage_selectors =
       window.CAMOUFLAGEE.items[0].selectors;
 
+  // Final normalization of the Variant Picker:
   if (finalVariantPicker) {
+    let option_wrappers_with_selectors = finalVariantPicker.option_wrappers.map(
+      (ow, index) => {
+        return {
+          option_wrapper: ow,
+          selectors: finalVariantPicker.selectors[index],
+        };
+      }
+    );
+
     finalVariantPicker = {
-      a__variantPicker: finalVariantPicker.variantPicker,
-      b__option_wrappers: finalVariantPicker.option_wrappers,
-      c__selectors: finalVariantPicker.selectors,
-      d__selector_meta_data: finalVariantPicker.selectorMetaData,
-      e__camouflage_selectors:
+      variantPicker: finalVariantPicker.variantPicker,
+      option_wrappers_with_selectors,
+      z__camouflage_selectors:
         finalVariantPicker.camouflage_selectors ||
         "Camouflage not enabled on store",
     };
@@ -1097,38 +1336,30 @@ async function test(getFullData = false) {
   });
 
   if (targetData.A__finalVariantPicker) {
-    let successObject = {
+    let TA7_Success_Object = {
       "[TA7 VERDICT]": "Success",
       // Variant_Picker: targetData.A__finalVariantPicker,
     };
 
     if (!getFullData) {
-      successObject.Variant_Picker = targetData.A__finalVariantPicker;
+      TA7_Success_Object.Variant_Picker = targetData.A__finalVariantPicker;
     } else {
-      successObject.Full_Data = targetData;
+      TA7_Success_Object.Full_Data = targetData;
     }
 
-    return successObject;
+    console.log({ TA7_Success_Object });
+    return targetData.A__finalVariantPicker;
   }
 
-  return {
-    "[TA7 VERDICT]": "Failure",
-    targetData,
-  };
+  console.error({
+    status: "[TA7] Failed",
+    cause: "No variant picker candidates found",
+  });
+  return null;
 }
 
 await test();
 
-// [BUG ALERT] : Currently, isValidVariantPicker() would give strange results if more than one, but not all
-// option_wrappers in the vp_candidate map 1:1 with the option axis.
-
-// [BUT ALERT] : Sometimes, you may not find as many disguised option_wrappers as optionCount. (Easier to handle).
-
-// 3. Also, instead of option values, variantIds are used in the data-* values of the selectors. How would you tackle that issue ? https://innovadiscgolfcanada.ca/products/wombat3-proto-glow-champion
-
-// [OPTIONAL] : 3rd Party Variant-pickers
-// [OPTIMIZATION STRATEGY] : Should we look for fs_cand directly instead of variant pickers ?
-//    We might save ourselves from structural validation.
 
 (async function TA7_Performance_Profile() {
   const PERF = {};

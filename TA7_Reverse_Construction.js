@@ -1214,15 +1214,9 @@ function getVariantPickersByRevCon(searchNode, product) {
 
 async function test(getFullData = false) {
   let targetData = {
-    A__finalVariantPicker: null, //finalVariantPickerTest,
-    B__parentNodeForVPCSearch: null, // {
-    //  searchNode : candidateObject.parent,
-    //  parentFoundInAnchorMode
-    // }
-    C__anchorData: null, //{
-    //   nameIdElement: anchorProductFormData.validNameIdElement,
-    //   anchorProductForm,
-    // },
+    A__finalVariantPicker: null,
+    B__parentNodeForVPCSearch: null, 
+    C__anchorData: null, 
   };
 
   const anchorProductFormData = findAnchorProductForm();

@@ -1058,36 +1058,24 @@ function getVariantPickersByRevCon(searchNode, product) {
    */
 
   let OPTION_VALUE_ATTRIBUTES = [
-    // Tier 1 — high-confidence, canonical
     "value",
     "data-option-value",
-    "data-option-value-id",
-    "data-option-id",
     "data-value",
-    "data-value-id",
-    "data-variant-id",
     "data-variant",
     "data-selected-value",
-
-    // Tier 2 — handles / normalized keys
     "data-value-handle",
     "data-option-handle",
     "data-handle",
     "data-option-key",
     "data-key",
-
-    // Tier 3 — generic but meaningful
     "data-option",
     "data-option-index",
     "data-index",
     "data-name",
     "data-current-value",
-
-    // Tier 4 — accessibility / framework-driven
     "orig-value",
     "aria-label",
     "aria-valuetext",
-    // "name",
   ];
 
   // GET PRODUCT DATA
@@ -1291,22 +1279,23 @@ async function test(getFullData = false) {
 
     // no 1:1 mapping in item : DISCARD and continue;
     if (!vp_validation_data) continue;
-    // true variant picker detected : success
-    else {
-      // OLD PIPELINE:
-      const finalSelectorResult = getCorrectVariantPickerWithSelectors(
-        item,
-        optionCount,
-        optionValueRack,
-        product.options,
-        vp_validation_data
-      );
 
-      if (finalSelectorResult) {
-        item.selectors = finalSelectorResult.selector_data;
-        finalVariantPicker = item;
-        break;
-      }
+    // true variant picker detected : success
+    const finalSelectorResult = getCorrectVariantPickerWithSelectors(
+      item,
+      optionCount,
+      optionValueRack,
+      product.options,
+      vp_validation_data
+    );
+
+    // testing purpose :
+    console.log({ vp_validation_data });
+
+    if (finalSelectorResult) {
+      item.selectors = finalSelectorResult.selector_data;
+      finalVariantPicker = item;
+      break;
     }
   }
 

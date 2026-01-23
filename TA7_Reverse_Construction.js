@@ -27,7 +27,11 @@ function findAnchorProductForm() {
 
   if (!anchors.length) {
     console.log("No anchors were found, revert to manual extraction");
-    return null;
+    return {
+      validNameIdElement: null,
+      anchorProductForm: null,
+      nameIdAnchors: [],
+    };
   }
 
   const productFormRegex = /product[-_]*.*[-_]*form/i;
@@ -1215,8 +1219,8 @@ function getVariantPickersByRevCon(searchNode, product) {
 async function test(getFullData = false) {
   let targetData = {
     A__finalVariantPicker: null,
-    B__parentNodeForVPCSearch: null, 
-    C__anchorData: null, 
+    B__parentNodeForVPCSearch: null,
+    C__anchorData: null,
   };
 
   const anchorProductFormData = findAnchorProductForm();
@@ -1322,14 +1326,15 @@ async function test(getFullData = false) {
       window.CAMOUFLAGEE.items[0].selectors;
 
   // Final normalization of the Variant Picker:
-
   if (finalVariantPicker) {
-    let option_wrappers_with_selectors = finalVariantPicker.option_wrappers.map((ow, index) => {
-      return {
-        option_wrapper: ow,
-        selectors: finalVariantPicker.selectors[index],
+    let option_wrappers_with_selectors = finalVariantPicker.option_wrappers.map(
+      (ow, index) => {
+        return {
+          option_wrapper: ow,
+          selectors: finalVariantPicker.selectors[index],
+        };
       }
-    })
+    );
 
     finalVariantPicker = {
       variantPicker: finalVariantPicker.variantPicker,
@@ -1348,18 +1353,18 @@ async function test(getFullData = false) {
   });
 
   if (targetData.A__finalVariantPicker) {
-    let successObject = {
+    let TA7_Success_Object = {
       "[TA7 VERDICT]": "Success",
       // Variant_Picker: targetData.A__finalVariantPicker,
     };
 
     if (!getFullData) {
-      successObject.Variant_Picker = targetData.A__finalVariantPicker;
+      TA7_Success_Object.Variant_Picker = targetData.A__finalVariantPicker;
     } else {
-      successObject.Full_Data = targetData;
+      TA7_Success_Object.Full_Data = targetData;
     }
 
-    console.log({ successObject });
+    console.log({ TA7_Success_Object });
     return targetData.A__finalVariantPicker;
   }
 

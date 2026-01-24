@@ -1290,7 +1290,7 @@ async function test(getFullData = false) {
     );
 
     // testing purpose :
-    console.log({ vp_validation_data });
+    console.log({ Control_Function: "test()", vp_validation_data });
 
     if (finalSelectorResult) {
       item.selectors = finalSelectorResult.selector_data;
@@ -1312,9 +1312,21 @@ async function test(getFullData = false) {
   if (finalVariantPicker) {
     let option_wrappers_with_selectors = finalVariantPicker.option_wrappers.map(
       (ow, index) => {
+        let sample_selector = finalVariantPicker.selectors[index].selectors[0];
+        // console.log({selectors: finalVariantPicker.selectors[index]});
+        // console.log({sample_selector});
+        let selector_tagName = sample_selector.tagName.toLowerCase();
+        let selector_type =
+          selector_tagName === "option" ? "select" : selector_tagName;
+        let selectors =
+          selector_type === "select"
+            ? sample_selector.parentElement
+            : finalVariantPicker.selectors[index].selectors;
+
         return {
-          option_wrapper: ow,
-          selectors: finalVariantPicker.selectors[index],
+          field_selector: ow,
+          selectors,
+          selector_type,
           value_attribute: finalVariantPicker.selectors[index].value_attribute,
         };
       }

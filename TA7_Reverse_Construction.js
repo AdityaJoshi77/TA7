@@ -1313,8 +1313,6 @@ async function test(getFullData = false) {
     let option_wrappers_with_selectors = finalVariantPicker.option_wrappers.map(
       (ow, index) => {
         let sample_selector = finalVariantPicker.selectors[index].selectors[0];
-        // console.log({selectors: finalVariantPicker.selectors[index]});
-        // console.log({sample_selector});
         let selector_tagName = sample_selector.tagName.toLowerCase();
         let selector_type =
           selector_tagName === "option" ? "select" : selector_tagName;

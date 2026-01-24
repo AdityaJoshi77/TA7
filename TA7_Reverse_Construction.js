@@ -1208,11 +1208,6 @@ async function test(getFullData = false) {
   const anchorProductFormData = findAnchorProductForm();
 
   const anchorProductForm = anchorProductFormData.anchorProductForm;
-  targetData.C__anchorData = {
-    nameIdElement: anchorProductFormData.validNameIdElement,
-    anchorProductForm,
-    nameIdAnchors: anchorProductFormData.nameIdAnchors,
-  };
 
   // Failure to find the anchorProductForm
   // INFERENCE: Our fundamental assumptions are violated by the theme. (Absolute Failure)
@@ -1223,6 +1218,13 @@ async function test(getFullData = false) {
     });
     return targetData;
   }
+
+
+  targetData.C__anchorData = {
+    nameIdElement: anchorProductFormData.validNameIdElement,
+    anchorProductForm,
+    nameIdAnchors: anchorProductFormData.nameIdAnchors,
+  };
 
   // GET PRODUCT DATA
   const product = await getProductData();
@@ -1333,6 +1335,8 @@ async function test(getFullData = false) {
     finalVariantPicker = {
       variantPicker: finalVariantPicker.variantPicker,
       option_wrappers_with_selectors,
+      variantIdField : anchorProductFormData.validNameIdElement,
+      observer_container : candidateObject.parent,
       z__camouflage_selectors:
         finalVariantPicker.camouflage_selectors ||
         "Camouflage not enabled on store",

@@ -820,6 +820,7 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
       return {
         variantPicker,
         option_wrappers,
+        LCA
       };
     }
     // continue climbing
@@ -1084,7 +1085,7 @@ function getVariantPickersByRevCon(searchNode, product) {
   // MAKE OPTION VALUE RACK
   let optionValueRack =
     product.options.length > 1
-      ? product.options.map((option) => option.values[0])
+      ? product.options.map((option) => option.values[option.values.length - 1])
       : product.options[0].values;
 
   let { selectorKeys, reduced_ova_array } = makeOVAKeysforOptionAxes(
@@ -1195,6 +1196,7 @@ function getVariantPickersByRevCon(searchNode, product) {
     variantPickerSet: finalVariantPickerSet,
     optionValueRack,
     optionCount,
+    variantPickerKeySets
   };
 }
 
@@ -1262,6 +1264,8 @@ async function test(getFullData = false) {
     });
     return null;
   }
+
+  targetData.D__variantPickerGenData = variantPickerGenData;
 
   let {
     variantPickerSet,
@@ -1370,7 +1374,7 @@ async function test(getFullData = false) {
     status: "[TA7] Failed",
     cause: "No variant picker candidates found",
   });
-  return null;
+  return targetData;
 }
 
 await test();

@@ -214,69 +214,22 @@ function generateOptionExtractionKeys(
 ) {
   let optionExtractionKeys = []; // used for selector assortment as per data-* value
 
-  if (optionCount > 1) {
-    let reducedOptionValueRackIndices = vp_validation_data.fieldSetMap.filter(
-      (index) => index !== -1
-    );
-
-    // for (let optionValueIndex in optionValueRack)
-    for (let optionValueIndex of reducedOptionValueRackIndices) {
-      let optionExtKey = {
-        optionAxis: optionsInJSON[optionValueIndex],
-        ov_attribute: [],
-        fs_cand: null,
-      };
-
-      for (let fs_cand_index in vp_candidate.option_wrappers) {
-        let fs_cand = vp_candidate.option_wrappers[fs_cand_index];
-
-        let matching_ova_inFsCand =
-          vp_validation_data.selector_yielding_ova_perFsCand[fs_cand_index];
-
-        for (let ov_attribute of matching_ova_inFsCand) {
-          const attributeSelector = `[${ov_attribute}="${CSS.escape(
-            optionValueRack[optionValueIndex]
-          )}"]`;
-          const dataValueFound = fs_cand.querySelector(attributeSelector);
-          if (dataValueFound) {
-            optionExtKey.ov_attribute.push(ov_attribute);
-            optionExtKey.fs_cand = fs_cand;
-          }
-        }
-
-        if (optionExtKey.fs_cand) {
-          optionExtractionKeys.push(optionExtKey);
-          break;
-          // if all the possible attritbute matches for the current option value
-          // have been found in the current fs_cand, the same value will not be found
-          // in any of the remaining fs_cand, so we can stop further checking here.
-        }
+  if(optionCount > 1){
+    optionExtractionKeys = vp_validation_data.fieldSetMap.map((optionAxisIndex, mapIndex) => {
+      return {
+        optionAxis: optionsInJSON[optionAxisIndex],
+        ov_attribute: vp_validation_data.selector_yielding_ova_perFsCand[mapIndex],
+        fs_cand: vp_candidate.option_wrappers[mapIndex]
       }
-    }
+    })
   } else {
-    let fs_cand = vp_validation_data.fieldSet;
-    let optionExtKey = {
-      optionAxis: optionValueRack,
-      ov_attribute: [],
-      fs_cand: null,
-    };
-    let matching_ova_inFsCand =
-      vp_validation_data.selector_yielding_ova_perFsCand[0];
-
-    for (let ov_attribute of matching_ova_inFsCand) {
-      for (let optionValue of optionValueRack) {
-        const attributeSelector = `[${ov_attribute}="${CSS.escape(
-          optionValue
-        )}"]`;
-        const dataValueFound = fs_cand.querySelector(attributeSelector);
-        if (dataValueFound) {
-          optionExtKey.fs_cand = fs_cand;
-          optionExtKey.ov_attribute.push(ov_attribute);
-        }
-      }
-    }
-    if (optionExtKey.fs_cand) optionExtractionKeys.push(optionExtKey);
+    optionExtractionKeys.push({
+      optionAxis : optionValueRack,
+      ov_attribute : vp_validation_data.selector_yielding_ova_perFsCand[0],
+      fs_cand : vp_validation_data.fieldSet
+    })
   }
+
   return optionExtractionKeys;
 }
 
@@ -615,6 +568,7 @@ function isValidVariantPicker(
     fs_cand_index < vp_candidate.option_wrappers.length;
     fs_cand_index++
   ) {
+    let fs_cand = fs_candidates[fs_cand_index];
     for (
       let optionAxisIndex = 0;
       optionAxisIndex < optionValuesRack.length;
@@ -635,8 +589,11 @@ function isValidVariantPicker(
         let attributeSelector = `[${ova}="${CSS.escape(
           optionValuesRack[optionAxisIndex]
         )}"]`;
-        let fs_cand = fs_candidates[fs_cand_index];
-        return fs_cand.querySelector(attributeSelector);
+
+        let somethingFound = fs_cand.querySelector(attributeSelector);
+        if(somethingFound){
+          return true;
+        }
       });
 
       if (selectorYieldingOVAList.length > 0) {
@@ -644,9 +601,12 @@ function isValidVariantPicker(
           one2oneMappingDetected = true;
           fieldSetMap[fs_cand_index] = optionAxisIndex;
           selector_yielding_ova_perFsCand.push(selectorYieldingOVAList);
-        } else if (isNumericString(optionValuesRack[optionAxisIndex])) {
-          continue;
-        } else {
+
+          if (isNumericString(optionValuesRack[optionAxisIndex])) {
+            break;
+          }
+        }
+        else {
           console.log({
             "isValidVariantPicker()": "1:1 mapping failed",
             fs_cand: fs_candidates[fs_cand_index],
@@ -676,51 +636,6 @@ function isValidVariantPicker(
   };
 
   return vp_validation_data;
-
-  // we are checking for the count of those fs_cand that couldn't be
-  // 1:1 mapped to any option axis.
-
-  /*
-  let mappedFscandCount = fieldSetMap.filter((v) => v !== -1).length;
-  */
-  // At this moment, it is implicit that the optionCount was > 1
-  // So if despite optionCount > 1, we have only a single 1:1 mapping
-  // It can mean only one thing :
-  // We have an option_wrapper disguised as the variant picker.
-
-  /*
-   if (mappedFscandCount > 1) return vp_validation_data;
-    console.warn({
-      Control_Function: "isValidVariantPicker()",
-      message: "Disguised Option wrapper",
-      vp_candidate,
-    });
-  */
-
-  /*
-  return null;
-  */
-
-  // if the vp_candidate is a disguised option_wrapper,
-  // we attach a disguisedOptionWrapper Boolean flag to the vp_validation_data
-  // to let the test() function adjust accordingly.
-  /**
-   vp_validation_data.disguisedOptionWrapper = true;
-    vp_validation_data.matchingOptionAxisIndex = fieldSetMap.find(
-      (value) => value > -1
-    );
-    vp_validation_data.trueFsCand =
-    vp_candidate.option_wrappers[fieldSetMap.findIndex((v) => v !== -1)];
-    vp_validation_data.selector_yielding_ova_perFsCand =
-      selector_yielding_ova_perFsCand.filter((array) => array.length);
-
-    return vp_validation_data;
-  */
-
-  // ONE CAVEAT:
-  // At this stage, the function can detect only those disguised vp_candidates
-  // which were structurally verified. If some option_wrapper is not structurally verified
-  // we will still miss it.
 }
 
 function isNumericString(value) {
@@ -820,7 +735,7 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
       return {
         variantPicker,
         option_wrappers,
-        LCA
+        LCA,
       };
     }
     // continue climbing
@@ -1196,7 +1111,7 @@ function getVariantPickersByRevCon(searchNode, product) {
     variantPickerSet: finalVariantPickerSet,
     optionValueRack,
     optionCount,
-    variantPickerKeySets
+    variantPickerKeySets,
   };
 }
 
@@ -1220,7 +1135,6 @@ async function test(getFullData = false) {
     });
     return targetData;
   }
-
 
   targetData.C__anchorData = {
     nameIdElement: anchorProductFormData.validNameIdElement,
@@ -1339,8 +1253,8 @@ async function test(getFullData = false) {
     finalVariantPicker = {
       variantPicker: finalVariantPicker.variantPicker,
       option_wrappers_with_selectors,
-      variantIdField : anchorProductFormData.validNameIdElement,
-      observer_container : candidateObject.parent,
+      variantIdField: anchorProductFormData.validNameIdElement,
+      observer_container: candidateObject.parent,
       z__camouflage_selectors:
         finalVariantPicker.camouflage_selectors ||
         "Camouflage not enabled on store",

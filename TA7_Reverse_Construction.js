@@ -184,11 +184,10 @@ function getCorrectVariantPickerWithSelectors(
   }
 
   // call the function to extract selectors per option Axis per ov_attribute
-  finalSelectorResult.selector_set =
-    generateSelectorsfromOpexKeys(
-      optionExtractionKeys,
-      optionCount
-    );
+  finalSelectorResult.selector_set = generateSelectorsfromOpexKeys(
+    optionExtractionKeys,
+    optionCount
+  );
 
   // at this point, if you get multiple set of selectors, they are
   // bound to be encoded by different ov_attribute.
@@ -214,29 +213,29 @@ function generateOptionExtractionKeys(
 ) {
   let optionExtractionKeys = []; // used for selector assortment as per data-* value
 
-  if(optionCount > 1){
-    optionExtractionKeys = vp_validation_data.fieldSetMap.map((optionAxisIndex, mapIndex) => {
-      return {
-        optionAxis: optionsInJSON[optionAxisIndex],
-        ov_attribute: vp_validation_data.selector_yielding_ova_perFsCand[mapIndex],
-        fs_cand: vp_candidate.option_wrappers[mapIndex]
+  if (optionCount > 1) {
+    optionExtractionKeys = vp_validation_data.fieldSetMap.map(
+      (optionAxisIndex, mapIndex) => {
+        return {
+          optionAxis: optionsInJSON[optionAxisIndex],
+          ov_attribute:
+            vp_validation_data.selector_yielding_ova_perFsCand[mapIndex],
+          fs_cand: vp_candidate.option_wrappers[mapIndex],
+        };
       }
-    })
+    );
   } else {
     optionExtractionKeys.push({
-      optionAxis : optionValueRack,
-      ov_attribute : vp_validation_data.selector_yielding_ova_perFsCand[0],
-      fs_cand : vp_validation_data.fieldSet
-    })
+      optionAxis: optionValueRack,
+      ov_attribute: vp_validation_data.selector_yielding_ova_perFsCand[0],
+      fs_cand: vp_validation_data.fieldSet,
+    });
   }
 
   return optionExtractionKeys;
 }
 
-function generateSelectorsfromOpexKeys(
-  optionExtractionKeys,
-  optionCount
-) {
+function generateSelectorsfromOpexKeys(optionExtractionKeys, optionCount) {
   let optionExtKeyCount = optionExtractionKeys.length;
 
   let finalSelectorSet = optionExtractionKeys.map((optionExtKey) => {
@@ -596,7 +595,7 @@ function isValidVariantPicker(
         )}"]`;
 
         let somethingFound = fs_cand.querySelector(attributeSelector);
-        if(somethingFound){
+        if (somethingFound) {
           return true;
         }
       });
@@ -610,8 +609,7 @@ function isValidVariantPicker(
           if (isNumericString(optionValuesRack[optionAxisIndex])) {
             break;
           }
-        }
-        else {
+        } else {
           console.log({
             "isValidVariantPicker()": "1:1 mapping failed",
             fs_cand: fs_candidates[fs_cand_index],
@@ -715,6 +713,13 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
     const parentSet = new Set(tempParents.map((el) => el.parentElement));
 
     // check if you get some parent in the parentSet which contains all the flagSelectors
+
+    // POTENTIAL FAILURE :
+    // LCA logic will construct an incorrect variant picker
+    // if (say) there are three option axes, but
+    // the immediate children of LCA are two.
+
+    // solution : Once LCA is detected, begin climbing downwards
     let LCA = Array.from(parentSet).find((parent) =>
       flagSelectors.every((flag) => parent.contains(flag))
     );
@@ -979,24 +984,37 @@ function getVariantPickersByRevCon(searchNode, product) {
    */
 
   let OPTION_VALUE_ATTRIBUTES = [
+    // Tier 1 — high-confidence, canonical
     "value",
     "data-option-value",
+    "data-option-value-id",
+    "data-option-id",
     "data-value",
+    "data-value-id",
+    "data-variant-id",
     "data-variant",
     "data-selected-value",
+    "value-id",
+
+    // Tier 2 — handles / normalized keys
     "data-value-handle",
     "data-option-handle",
     "data-handle",
     "data-option-key",
     "data-key",
+
+    // Tier 3 — generic but meaningful
     "data-option",
     "data-option-index",
     "data-index",
     "data-name",
     "data-current-value",
+
+    // Tier 4 — accessibility / framework-driven
     "orig-value",
     "aria-label",
     "aria-valuetext",
+    // "name",
   ];
 
   // GET PRODUCT DATA
@@ -1120,7 +1138,7 @@ function getVariantPickersByRevCon(searchNode, product) {
   };
 }
 
-async function test(getFullData = false) {
+async function test(useOptionValueIds = false, getFullData = false) {
   let targetData = {
     A__finalVariantPicker: null,
     B__parentNodeForVPCSearch: null,
@@ -1148,10 +1166,24 @@ async function test(getFullData = false) {
   };
 
   // GET PRODUCT DATA
-  const product = await getProductData();
-  const optionNames = product.options.map((option) =>
-    option.name.toLowerCase()
-  );
+  let product, optionNames;
+  if (!useOptionValueIds) {
+    product = await getProductData();
+    optionNames = product.options.map((option) => option.name.toLowerCase());
+  } else {
+    product = {
+      options: window.CAMOUFLAGEE.items[0].product.options_with_values.map(
+        (option) => ({
+          name: option.name,
+          values: option.values.map((v) => v.id),
+        })
+      ),
+    };
+
+    optionNames = product.options.map((option) => option.name.toLowerCase());
+
+    console.log({ product });
+  }
 
   // Find a stable parent,
   let anchorHook =

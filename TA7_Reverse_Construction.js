@@ -185,7 +185,7 @@ function getCorrectVariantPickerWithSelectors(
 
   // call the function to extract selectors per option Axis per ov_attribute
   finalSelectorResult.selector_set =
-    normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
+    generateSelectorsfromOpexKeys(
       optionExtractionKeys,
       optionCount
     );
@@ -233,7 +233,7 @@ function generateOptionExtractionKeys(
   return optionExtractionKeys;
 }
 
-function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
+function generateSelectorsfromOpexKeys(
   optionExtractionKeys,
   optionCount
 ) {
@@ -249,10 +249,15 @@ function normalizeSelectorSetForMultiOptionCount_filtered_and_deduplicated(
     for (let ov_attribute of ov_attribute_array) {
       let selectorSet = new Set();
 
+      // let optionValuesInAxis =
+      //   optionExtKeyCount > 1
+      //     ? optionExtKey.optionAxis.values
+      //     : optionCount > 1
+      //     ? optionExtKey.optionAxis.values
+      //     : optionExtKey.optionAxis;
+
       let optionValuesInAxis =
-        optionExtKeyCount > 1
-          ? optionExtKey.optionAxis.values
-          : optionCount > 1
+        optionExtKeyCount > 1 || optionCount > 1
           ? optionExtKey.optionAxis.values
           : optionExtKey.optionAxis;
 

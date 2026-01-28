@@ -153,14 +153,16 @@ function getCorrectVariantPickerWithSelectors(
   vp_candidate,
   optionCount,
   optionValueRack,
-  optionsInJSON,
+  encodingIndex,
+  productOptions,
   vp_validation_data
 ) {
   let optionExtractionKeys = generateOptionExtractionKeys(
     vp_candidate,
     optionCount,
     optionValueRack,
-    optionsInJSON,
+    encodingIndex,
+    productOptions,
     vp_validation_data
   );
 
@@ -184,10 +186,8 @@ function getCorrectVariantPickerWithSelectors(
   }
 
   // call the function to extract selectors per option Axis per ov_attribute
-  finalSelectorResult.selector_set = generateSelectorsfromOpexKeys(
-    optionExtractionKeys,
-    optionCount
-  );
+  finalSelectorResult.selector_set =
+    generateSelectorsfromOpexKeys(optionExtractionKeys);
 
   // at this point, if you get multiple set of selectors, they are
   // bound to be encoded by different ov_attribute.
@@ -208,7 +208,8 @@ function generateOptionExtractionKeys(
   vp_candidate,
   optionCount,
   optionValueRack,
-  optionsInJSON,
+  encodingIndex,
+  productOptions,
   vp_validation_data
 ) {
   let optionExtractionKeys = []; // used for selector assortment as per data-* value
@@ -217,7 +218,7 @@ function generateOptionExtractionKeys(
     optionExtractionKeys = vp_validation_data.fieldSetMap.map(
       (optionAxisIndex, mapIndex) => {
         return {
-          optionAxis: optionsInJSON[optionAxisIndex],
+          optionAxis: productOptions[optionAxisIndex].values[encodingIndex],
           ov_attribute:
             vp_validation_data.selector_yielding_ova_perFsCand[mapIndex],
           fs_cand: vp_candidate.option_wrappers[mapIndex],
@@ -232,12 +233,11 @@ function generateOptionExtractionKeys(
     });
   }
 
+  console.log({ optionExtractionKeys });
   return optionExtractionKeys;
 }
 
-function generateSelectorsfromOpexKeys(optionExtractionKeys, optionCount) {
-  let optionExtKeyCount = optionExtractionKeys.length;
-
+function generateSelectorsfromOpexKeys(optionExtractionKeys) {
   let finalSelectorSet = optionExtractionKeys.map((optionExtKey) => {
     let ov_attribute_array = Array.from(optionExtKey.ov_attribute);
     let fs_cand = optionExtKey.fs_cand;
@@ -248,17 +248,7 @@ function generateSelectorsfromOpexKeys(optionExtractionKeys, optionCount) {
     for (let ov_attribute of ov_attribute_array) {
       let selectorSet = new Set();
 
-      // let optionValuesInAxis =
-      //   optionExtKeyCount > 1
-      //     ? optionExtKey.optionAxis.values
-      //     : optionCount > 1
-      //     ? optionExtKey.optionAxis.values
-      //     : optionExtKey.optionAxis;
-
-      let optionValuesInAxis =
-        optionExtKeyCount > 1 || optionCount > 1
-          ? optionExtKey.optionAxis.values
-          : optionExtKey.optionAxis;
+      let optionValuesInAxis = optionExtKey.optionAxis;
 
       for (let optionValue of optionValuesInAxis) {
         const attributeSelector = `[${ov_attribute}="${CSS.escape(
@@ -862,6 +852,8 @@ function makeOVAKeysforOptionAxes(
   let temp_ova_set = new Set();
   let selectorKeys = [];
 
+  // Before proceeding, ensure the validity of the optionValueRack.
+
   optionValueRack.forEach((optionValue, index) => {
     let selectorKey = {
       A1__optionValue: optionValue,
@@ -898,6 +890,57 @@ function makeOVAKeysforOptionAxes(
   });
 
   return { selectorKeys, reduced_ova_array };
+}
+
+function selectorEncodingValidator(
+  searchNode,
+  OPTION_VALUE_ATTRIBUTES,
+  optionValueRack_literal,
+  optionValueRack_id = null
+) {
+  let encodingFormat = -1;
+  let rackSize = optionValueRack_literal.length;
+  // let attributeSelector = `[${ova}="${CSS.escape(value)}"]`
+
+  for (let ova of OPTION_VALUE_ATTRIBUTES) {
+    for (let i = 0; i < rackSize; i++) {
+      let optionValueLiteral = optionValueRack_literal[i];
+      let attributeSelector = `[${ova}="${CSS.escape(optionValueLiteral)}"]`;
+      let selectorFound = searchNode.querySelector(attributeSelector);
+      if (selectorFound) {
+        console.log({
+          ova,
+          selectorFound,
+          attributeSelector,
+          encodingFormat: 0,
+        });
+        encodingFormat += 1;
+        break;
+      }
+    }
+  }
+
+  if (!optionValueRack_id) return encodingFormat;
+
+  for (let ova of OPTION_VALUE_ATTRIBUTES) {
+    for (let i = 0; i < rackSize; i++) {
+      let optionValueId = optionValueRack_id[i];
+      let attributeSelector = `[${ova}="${CSS.escape(optionValueId)}"]`;
+      let selectorFound = searchNode.querySelector(attributeSelector);
+      if (selectorFound) {
+        console.log({
+          ova,
+          selectorFound,
+          attributeSelector,
+          encodingFormat: 1,
+        });
+        encodingFormat += 2;
+        break;
+      }
+    }
+  }
+
+  return null;
 }
 
 function getVariantPickersByRevCon(searchNode, product) {
@@ -1020,11 +1063,66 @@ function getVariantPickersByRevCon(searchNode, product) {
   // GET PRODUCT DATA
   let optionCount = product.options.length;
 
-  // MAKE OPTION VALUE RACK
-  let optionValueRack =
-    product.options.length > 1
-      ? product.options.map((option) => option.values[option.values.length - 1])
-      : product.options[0].values;
+  // MAKE OPTION VALUE RACK SETS FROM OPTION_VALUE_NAMES AND (IF AVAILABLE) OPTION_VALUE_IDS
+  let optionValueRackCollection = [0, 1].map((valueTypeIndex) => {
+    if (product.options[0].values.length > valueTypeIndex) {
+      // not all stores may be using ids to encode selectors.
+      let ovrc_data =
+        product.options.length > 1
+          ? product.options.map((option) =>
+              option.values[valueTypeIndex].at(-1)
+            )
+          : product.options[0].values[valueTypeIndex];
+      // console.log({ovrc_data});
+      return ovrc_data;
+    }
+  });
+
+  console.log({ optionValueRackCollection });
+
+  let encodingIndex = null;
+  if (optionValueRackCollection.length > 1)
+    encodingIndex = selectorEncodingValidator(
+      searchNode,
+      OPTION_VALUE_ATTRIBUTES,
+      optionValueRackCollection[0],
+      optionValueRackCollection[1]
+    );
+  else {
+    encodingIndex = selectorEncodingValidator(
+      searchNode,
+      OPTION_VALUE_ATTRIBUTES,
+      optionValueRackCollection[0]
+    );
+  }
+
+  let optionValueRack = null;
+  if (encodingIndex === -1) {
+    console.error({
+      Control_Function: "getVariantPickersByRevCon()",
+      Failure: "Encoding format failure",
+    });
+    return null;
+  }
+
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+  function getVariantPickerSets(
+    searchNode,
+    optionValueRackCollection,
+    OPTION_VALUE_ATTRIBUTES,
+    encodingIndex,
+    optionCount
+  ){
+    
+  }
+
+
+  // Now, the behaviour of the code will change based on
+  // whether the value of the encodingIndex is 0, 1, or 2.
+
+  optionValueRack = optionValueRackCollection[encodingIndex];
+  console.log({ optionValueRackSelected: optionValueRack });
 
   let { selectorKeys, reduced_ova_array } = makeOVAKeysforOptionAxes(
     searchNode,
@@ -1091,11 +1189,12 @@ function getVariantPickersByRevCon(searchNode, product) {
 
     let matchedAxisIndices = populatedSelectorKeys.map((psk) => psk.index);
     if (matchedAxisIndices.length === 1) {
-      optionValueRack = product.options[matchedAxisIndices[0]].values;
+      optionValueRack =
+        product.options[matchedAxisIndices[0]].values[encodingIndex];
       optionCount = 1;
     } else {
-      optionValueRack = matchedAxisIndices.map(
-        (index) => product.options[index][0]
+      optionValueRack = matchedAxisIndices.map((index) =>
+        product.options[index].values[encodingIndex].at(-1)
       );
       optionCount = matchedAxisIndices.length;
     }
@@ -1114,9 +1213,14 @@ function getVariantPickersByRevCon(searchNode, product) {
     optionCount
   );
   // console.log({ variantPickerKeySets });
+
+
   let finalVariantPickerSet = variantPickerKeySets.map((set) =>
     createVariantPicker(set, optionCount)
   );
+
+  /////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
   if (
     !finalVariantPickerSet.length ||
@@ -1130,6 +1234,7 @@ function getVariantPickersByRevCon(searchNode, product) {
   }
 
   return {
+    encodingIndex,
     OPTION_VALUE_ATTRIBUTES: reduced_ova_array,
     variantPickerSet: finalVariantPickerSet,
     optionValueRack,
@@ -1138,7 +1243,7 @@ function getVariantPickersByRevCon(searchNode, product) {
   };
 }
 
-async function test(useOptionValueIds = false, getFullData = false) {
+async function test(getFullData = true) {
   let targetData = {
     A__finalVariantPicker: null,
     B__parentNodeForVPCSearch: null,
@@ -1166,24 +1271,34 @@ async function test(useOptionValueIds = false, getFullData = false) {
   };
 
   // GET PRODUCT DATA
-  let product, optionNames;
-  if (!useOptionValueIds) {
+  let product = null,
+    optionNames = null;
+  product = window.CAMOUFLAGEE
+    ? {
+        options: window.CAMOUFLAGEE.items[0].product.options_with_values.map(
+          (option) => ({
+            name: option.name,
+            values: [
+              option.values.map((v) => v.name),
+              option.values.map((v) => v.id),
+            ],
+          })
+        ),
+      }
+    : null;
+
+  if (!product) {
     product = await getProductData();
-    optionNames = product.options.map((option) => option.name.toLowerCase());
-  } else {
-    product = {
-      options: window.CAMOUFLAGEE.items[0].product.options_with_values.map(
-        (option) => ({
-          name: option.name,
-          values: option.values.map((v) => v.id),
-        })
-      ),
-    };
-
-    optionNames = product.options.map((option) => option.name.toLowerCase());
-
-    console.log({ product });
+    product.options = product.options.map((option) => ({
+      name: option.name,
+      // fix this although not necessary
+      // since the logic will eventually be used on active stores.
+      values: [option.values.map((v) => v.name)],
+    }));
   }
+
+  console.log({ product });
+  optionNames = product.options.map((option) => option.name);
 
   // Find a stable parent,
   let anchorHook =
@@ -1219,6 +1334,7 @@ async function test(useOptionValueIds = false, getFullData = false) {
   targetData.D__variantPickerGenData = variantPickerGenData;
 
   let {
+    encodingIndex,
     variantPickerSet,
     OPTION_VALUE_ATTRIBUTES,
     optionValueRack,
@@ -1242,6 +1358,7 @@ async function test(useOptionValueIds = false, getFullData = false) {
       item,
       optionCount,
       optionValueRack,
+      encodingIndex,
       product.options,
       vp_validation_data
     );

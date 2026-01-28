@@ -1213,7 +1213,7 @@ function getVariantPickersByRevCon(searchNode, product) {
       // console.log({ovrc_data});
       return ovrc_data;
     }
-  });
+  }).filter(Boolean);
 
   console.log({ optionValueRackCollection });
 
@@ -1254,7 +1254,7 @@ function getVariantPickersByRevCon(searchNode, product) {
       encodingIndex,
       optionCount, 
       product
-    );
+    ) || [];
   else {
     finalVariantPickerSet = optionValueRackCollection.map(
       (optionValueRack, encodingIndex) =>
@@ -1266,7 +1266,7 @@ function getVariantPickersByRevCon(searchNode, product) {
           optionCount,
           product
         )
-    );
+    ) || [];
   }
 
   // Now, the behaviour of the code will change based on

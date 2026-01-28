@@ -902,11 +902,12 @@ function selectorEncodingValidator(
   let rackSize = optionValueRack_literal.length;
   // let attributeSelector = `[${ova}="${CSS.escape(value)}"]`
 
-  for (let ova of OPTION_VALUE_ATTRIBUTES) {
+  outerLoop: for (let ova of OPTION_VALUE_ATTRIBUTES) {
     for (let i = 0; i < rackSize; i++) {
       let optionValueLiteral = optionValueRack_literal[i];
       let attributeSelector = `[${ova}="${CSS.escape(optionValueLiteral)}"]`;
       let selectorFound = searchNode.querySelector(attributeSelector);
+
       if (selectorFound) {
         console.log({
           ova,
@@ -914,15 +915,16 @@ function selectorEncodingValidator(
           attributeSelector,
           encodingFormat: 0,
         });
+
         encodingFormat += 1;
-        break;
+        break outerLoop;
       }
     }
   }
 
   if (!optionValueRack_id) return encodingFormat;
 
-  for (let ova of OPTION_VALUE_ATTRIBUTES) {
+  outerLoop: for (let ova of OPTION_VALUE_ATTRIBUTES) {
     for (let i = 0; i < rackSize; i++) {
       let optionValueId = optionValueRack_id[i];
       let attributeSelector = `[${ova}="${CSS.escape(optionValueId)}"]`;
@@ -935,12 +937,147 @@ function selectorEncodingValidator(
           encodingFormat: 1,
         });
         encodingFormat += 2;
-        break;
+        break outerLoop;
       }
     }
   }
 
-  return null;
+  return encodingFormat;
+}
+
+function getVariantPickerSets(
+  searchNode,
+  optionValueRack,
+  OPTION_VALUE_ATTRIBUTES,
+  encodingIndex,
+  optionCount,
+  product
+) {
+  console.log({ optionValueRackSelected: optionValueRack });
+  let { selectorKeys, reduced_ova_array } = makeOVAKeysforOptionAxes(
+    searchNode,
+    optionValueRack,
+    OPTION_VALUE_ATTRIBUTES
+  );
+
+  let populatedSelectorKeys = selectorKeys.filter((selKey) =>
+    reduced_ova_array.some((ova) => Object.hasOwn(selKey, ova))
+  );
+
+  if (optionCount > 1 && populatedSelectorKeys.length != optionCount) {
+    console.warn({
+      Control_Function: "Not all fieldsets are present",
+      Pivot: "Remaking the selectorKeys for the populated Option Axes...",
+      populatedSelectorKeys,
+    });
+
+    /** RATIONALE FOR AXIS REDUCTION
+     * AXIS REDUCTION — WHY THIS IS SAFE AND NECESSARY
+     *
+     * CONTEXT:
+     * At this point, not all option axes were detected in the DOM.
+     * This does NOT immediately mean failure.
+     *
+     * WHY AXES MAY BE MISSING:
+     * - Themes may hide secondary option axes
+     * - Some axes may have a single value and be visually suppressed
+     * - Variant pickers may be progressively revealed via JS
+     *
+     * CORE INSIGHT:
+     * Variant picker *structure* can be inferred from a subset of axes.
+     *
+     * Structural truth ≠ Exhaustive value coverage
+     *
+     * STRATEGY:
+     * - Identify which option axes successfully yielded selectors
+     * - Reduce the problem space to only those axes
+     * - Re-run reverse construction using the reduced axis set
+     *
+     * CASES:
+     * 1) Only one axis detected:
+     *    → Treat as single-option product
+     *    → Use all values from that axis
+     *
+     * 2) Multiple axes detected:
+     *    → Use one representative value per detected axis
+     *
+     * WHY THIS WORKS:
+     * - DOM structure (parents, wrappers, containers) is shared
+     *   across all option axes
+     * - Missing axes rarely introduce new containers
+     * - Structural convergence remains stable
+     *
+     * FAILURE GUARANTEE:
+     * If reduced-axis reconstruction is incorrect,
+     * downstream validation (1:1 mapping & selector checks)
+     * will reject the candidate.
+     *
+     * In other words:
+     * Axis reduction increases recall,
+     * validation preserves precision.
+     */
+
+    let matchedAxisIndices = populatedSelectorKeys.map((psk) => psk.index);
+    if (matchedAxisIndices.length === 1) {
+      optionValueRack =
+        product.options[matchedAxisIndices[0]].values[encodingIndex];
+      optionCount = 1;
+    } else {
+      optionValueRack = matchedAxisIndices.map((index) =>
+        product.options[index].values[encodingIndex].at(-1)
+      );
+      optionCount = matchedAxisIndices.length;
+    }
+
+    let newSelectorKeyData = makeOVAKeysforOptionAxes(
+      searchNode,
+      optionValueRack,
+      reduced_ova_array
+    );
+    ({ selectorKeys, reduced_ova_array } = newSelectorKeyData);
+  }
+
+  let variantPickerKeySets = createLeafNodeSelectorSets(
+    selectorKeys,
+    reduced_ova_array,
+    optionCount
+  );
+  // console.log({ variantPickerKeySets });
+
+  let finalVariantPickerSet = variantPickerKeySets.map((set) =>
+    createVariantPicker(set, optionCount)
+  );
+
+  if (
+    !finalVariantPickerSet.length ||
+    reduced_ova_array.length === OPTION_VALUE_ATTRIBUTES.length
+  ) {
+    console.warn({
+      Control_Function: "getVariantPickerSets",
+      Failure: "could not extract the variant picker",
+    });
+    return null;
+  }
+
+  return [...finalVariantPickerSet.map((variant_picker) => {
+    return {
+      variant_picker,
+      encodingIndex,
+      OPTION_VALUE_ATTRIBUTES: reduced_ova_array,
+      optionCount,
+      optionValueRack,
+    };
+  })];
+
+  // return {
+  //   encodingIndex,
+  //   OPTION_VALUE_ATTRIBUTES: reduced_ova_array,
+  //   variantPickerSet: finalVariantPickerSet,
+  //   optionValueRack,
+  //   optionCount,
+  // };
+
+  // return finalVariantPickerSet;
 }
 
 function getVariantPickersByRevCon(searchNode, product) {
@@ -1096,7 +1233,6 @@ function getVariantPickersByRevCon(searchNode, product) {
     );
   }
 
-  let optionValueRack = null;
   if (encodingIndex === -1) {
     console.error({
       Control_Function: "getVariantPickersByRevCon()",
@@ -1105,127 +1241,40 @@ function getVariantPickersByRevCon(searchNode, product) {
     return null;
   }
 
+  console.log({ encodingIndex });
+
   ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-  function getVariantPickerSets(
-    searchNode,
-    optionValueRackCollection,
-    OPTION_VALUE_ATTRIBUTES,
-    encodingIndex,
-    optionCount
-  ){
-    
+  let finalVariantPickerSet = [];
+  if (encodingIndex !== 2)
+    finalVariantPickerSet = getVariantPickerSets(
+      searchNode,
+      optionValueRackCollection[encodingIndex],
+      OPTION_VALUE_ATTRIBUTES,
+      encodingIndex,
+      optionCount, 
+      product
+    );
+  else {
+    finalVariantPickerSet = optionValueRackCollection.map(
+      (optionValueRack, encodingIndex) =>
+        getVariantPickerSets(
+          searchNode,
+          optionValueRack,
+          OPTION_VALUE_ATTRIBUTES,
+          encodingIndex,
+          optionCount,
+          product
+        )
+    );
   }
-
 
   // Now, the behaviour of the code will change based on
   // whether the value of the encodingIndex is 0, 1, or 2.
 
-  optionValueRack = optionValueRackCollection[encodingIndex];
-  console.log({ optionValueRackSelected: optionValueRack });
-
-  let { selectorKeys, reduced_ova_array } = makeOVAKeysforOptionAxes(
-    searchNode,
-    optionValueRack,
-    OPTION_VALUE_ATTRIBUTES
-  );
-
-  let populatedSelectorKeys = selectorKeys.filter((selKey) =>
-    reduced_ova_array.some((ova) => Object.hasOwn(selKey, ova))
-  );
-
-  if (optionCount > 1 && populatedSelectorKeys.length != optionCount) {
-    console.warn({
-      Control_Function: "Not all fieldsets are present",
-      Pivot: "Remaking the selectorKeys for the populated Option Axes...",
-      populatedSelectorKeys,
-    });
-
-    /** RATIONALE FOR AXIS REDUCTION
-     * AXIS REDUCTION — WHY THIS IS SAFE AND NECESSARY
-     *
-     * CONTEXT:
-     * At this point, not all option axes were detected in the DOM.
-     * This does NOT immediately mean failure.
-     *
-     * WHY AXES MAY BE MISSING:
-     * - Themes may hide secondary option axes
-     * - Some axes may have a single value and be visually suppressed
-     * - Variant pickers may be progressively revealed via JS
-     *
-     * CORE INSIGHT:
-     * Variant picker *structure* can be inferred from a subset of axes.
-     *
-     * Structural truth ≠ Exhaustive value coverage
-     *
-     * STRATEGY:
-     * - Identify which option axes successfully yielded selectors
-     * - Reduce the problem space to only those axes
-     * - Re-run reverse construction using the reduced axis set
-     *
-     * CASES:
-     * 1) Only one axis detected:
-     *    → Treat as single-option product
-     *    → Use all values from that axis
-     *
-     * 2) Multiple axes detected:
-     *    → Use one representative value per detected axis
-     *
-     * WHY THIS WORKS:
-     * - DOM structure (parents, wrappers, containers) is shared
-     *   across all option axes
-     * - Missing axes rarely introduce new containers
-     * - Structural convergence remains stable
-     *
-     * FAILURE GUARANTEE:
-     * If reduced-axis reconstruction is incorrect,
-     * downstream validation (1:1 mapping & selector checks)
-     * will reject the candidate.
-     *
-     * In other words:
-     * Axis reduction increases recall,
-     * validation preserves precision.
-     */
-
-    let matchedAxisIndices = populatedSelectorKeys.map((psk) => psk.index);
-    if (matchedAxisIndices.length === 1) {
-      optionValueRack =
-        product.options[matchedAxisIndices[0]].values[encodingIndex];
-      optionCount = 1;
-    } else {
-      optionValueRack = matchedAxisIndices.map((index) =>
-        product.options[index].values[encodingIndex].at(-1)
-      );
-      optionCount = matchedAxisIndices.length;
-    }
-
-    let newSelectorKeyData = makeOVAKeysforOptionAxes(
-      searchNode,
-      optionValueRack,
-      reduced_ova_array
-    );
-    ({ selectorKeys, reduced_ova_array } = newSelectorKeyData);
-  }
-
-  let variantPickerKeySets = createLeafNodeSelectorSets(
-    selectorKeys,
-    reduced_ova_array,
-    optionCount
-  );
-  // console.log({ variantPickerKeySets });
-
-
-  let finalVariantPickerSet = variantPickerKeySets.map((set) =>
-    createVariantPicker(set, optionCount)
-  );
-
   /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-  if (
-    !finalVariantPickerSet.length ||
-    reduced_ova_array.length === OPTION_VALUE_ATTRIBUTES.length
-  ) {
+  if (!finalVariantPickerSet.length) {
     console.warn({
       Control_Function: "getVariantPickersByRevCon()",
       Failure: "could not extract the variant picker",
@@ -1233,14 +1282,7 @@ function getVariantPickersByRevCon(searchNode, product) {
     return null;
   }
 
-  return {
-    encodingIndex,
-    OPTION_VALUE_ATTRIBUTES: reduced_ova_array,
-    variantPickerSet: finalVariantPickerSet,
-    optionValueRack,
-    optionCount,
-    variantPickerKeySets,
-  };
+  return finalVariantPickerSet;
 }
 
 async function test(getFullData = true) {
@@ -1321,7 +1363,7 @@ async function test(getFullData = true) {
   let variantPickerGenData = getVariantPickersByRevCon(
     candidateObject.parent,
     product
-  );
+  ).flat();
 
   if (!variantPickerGenData) {
     console.error({
@@ -1333,21 +1375,15 @@ async function test(getFullData = true) {
 
   targetData.D__variantPickerGenData = variantPickerGenData;
 
-  let {
-    encodingIndex,
-    variantPickerSet,
-    OPTION_VALUE_ATTRIBUTES,
-    optionValueRack,
-    optionCount,
-  } = variantPickerGenData;
-
+  console.log({variantPickerGenData});
   let finalVariantPicker = null;
-  for (const item of variantPickerSet) {
+  for (const item of variantPickerGenData) {
+    console.log({item});
     const vp_validation_data = isValidVariantPicker(
-      item,
-      optionCount,
-      optionValueRack,
-      OPTION_VALUE_ATTRIBUTES
+      item.variant_picker,
+      item.optionCount,
+      item.optionValueRack,
+      item.OPTION_VALUE_ATTRIBUTES
     );
 
     // no 1:1 mapping in item : DISCARD and continue;
@@ -1355,10 +1391,10 @@ async function test(getFullData = true) {
 
     // true variant picker detected : success
     const finalSelectorResult = getCorrectVariantPickerWithSelectors(
-      item,
-      optionCount,
-      optionValueRack,
-      encodingIndex,
+      item.variant_picker,
+      item.optionCount,
+      item.optionValueRack,
+      item.encodingIndex,
       product.options,
       vp_validation_data
     );
@@ -1368,7 +1404,12 @@ async function test(getFullData = true) {
 
     if (finalSelectorResult) {
       item.selectors = finalSelectorResult.selector_data;
-      finalVariantPicker = item;
+      console.log({FinalItem : item});
+      finalVariantPicker = {
+        variantPicker : item.variant_picker.variantPicker,
+        option_wrappers : item.variant_picker.option_wrappers,
+        selectors: item.selectors
+      }
       break;
     }
   }

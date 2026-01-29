@@ -663,7 +663,7 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
    * - Single-option products:
    *   Structure is flattened and adjusted heuristically
    *
-   * OUTPUT:
+   * OUTPUT: 
    * - variantPicker: the inferred container element
    * - option_wrappers: DOM nodes representing option axes
    *
@@ -730,6 +730,38 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
         });
       } else {
         (option_wrappers = [LCA]), (variantPicker = LCA.parentElement);
+      }
+
+      let mergeVerificationSet = new Set(option_wrappers);
+      if (mergeVerificationSet.size < optionCount) {
+        /* WHY ?:
+           Sometimes, the option axis has only one selector, 
+           and the option wrapper is data-value encoded just like the selector.
+
+           This leads to accidental selection of the option wrapper rather than the selector.
+           Due to this, the LCA function -by design - merges all the option wrappers into a single wrapper
+
+           which will lead to a false-negative later in the isValidVariantPicker() due to failure of
+           1:1 mapping.
+
+           This discrepancy emanates from the creatLeafNodeSelectors(), but is not corrected there, since
+           it is handling a very critical edge case. 
+           Handling this issue at the root is neither possible nor advisable.  
+        */
+
+        console.warn({
+          Control_Function: "createVariantPicker()",
+          message: "option_wrappers merged, resolving...",
+          leafSelectors: leafNodeSelectorsArr
+        })
+        let mergeNode = Array.from(mergeVerificationSet).find(node => flagSelectors.every(sel => node.contains(sel)));
+        variantPicker = mergeNode;
+        let tempParentsForMerge = [...leafNodeSelectorsArr];
+        option_wrappers = tempParentsForMerge.map(temp => {
+          while (temp.parentElement !== variantPicker)
+            temp = temp.parentElement;
+          return temp;
+        })
       }
 
       return {
@@ -808,6 +840,11 @@ function createLeafNodeSelectorSets(
   return variantPickerKeySets;
 }
 
+function isPureLeaf(node, attrSelector) {
+  return !node.querySelector(attrSelector);
+}
+
+
 function makeOVAKeysforOptionAxes(
   searchNode,
   optionValueRack,
@@ -867,6 +904,9 @@ function makeOVAKeysforOptionAxes(
       );
 
       if (selectors.length) {
+
+        selectors = selectors.filter(selector => isPureLeaf(selector, attributeSelector));
+
         if (Object.hasOwn(selectorKey, ova)) {
           selectorKey[ova].push(...selectors);
         } else {
@@ -888,6 +928,8 @@ function makeOVAKeysforOptionAxes(
     temp_ova_set.clear();
     selectorKeys.push(selectorKey);
   });
+
+  console.log({ ovaKeyForOptionAxes: selectorKeys });
 
   return { selectorKeys, reduced_ova_array };
 }
@@ -1207,8 +1249,8 @@ function getVariantPickersByRevCon(searchNode, product) {
       let ovrc_data =
         product.options.length > 1
           ? product.options.map((option) =>
-              option.values[valueTypeIndex].at(-1)
-            )
+            option.values[valueTypeIndex].at(-1)
+          )
           : product.options[0].values[valueTypeIndex];
       // console.log({ovrc_data});
       return ovrc_data;
@@ -1252,7 +1294,7 @@ function getVariantPickersByRevCon(searchNode, product) {
       optionValueRackCollection[encodingIndex],
       OPTION_VALUE_ATTRIBUTES,
       encodingIndex,
-      optionCount, 
+      optionCount,
       product
     ) || [];
   else {
@@ -1317,16 +1359,16 @@ async function test(getFullData = true) {
     optionNames = null;
   product = window.CAMOUFLAGEE
     ? {
-        options: window.CAMOUFLAGEE.items[0].product.options_with_values.map(
-          (option) => ({
-            name: option.name,
-            values: [
-              option.values.map((v) => v.name),
-              option.values.map((v) => v.id),
-            ],
-          })
-        ),
-      }
+      options: window.CAMOUFLAGEE.items[0].product.options_with_values.map(
+        (option) => ({
+          name: option.name,
+          values: [
+            option.values.map((v) => v.name),
+            option.values.map((v) => v.id),
+          ],
+        })
+      ),
+    }
     : null;
 
   if (!product) {
@@ -1375,10 +1417,10 @@ async function test(getFullData = true) {
 
   targetData.D__variantPickerGenData = variantPickerGenData;
 
-  console.log({variantPickerGenData});
+  console.log({ variantPickerGenData });
   let finalVariantPicker = null;
   for (const item of variantPickerGenData) {
-    console.log({item});
+    console.log({ item });
     const vp_validation_data = isValidVariantPicker(
       item.variant_picker,
       item.optionCount,
@@ -1404,11 +1446,12 @@ async function test(getFullData = true) {
 
     if (finalSelectorResult) {
       item.selectors = finalSelectorResult.selector_data;
-      console.log({FinalItem : item});
+      console.log({ FinalItem: item });
       finalVariantPicker = {
-        variantPicker : item.variant_picker.variantPicker,
-        option_wrappers : item.variant_picker.option_wrappers,
-        selectors: item.selectors
+        variantPicker: item.variant_picker.variantPicker,
+        option_wrappers: item.variant_picker.option_wrappers,
+        selectors: item.selectors,
+        encodingIndex: item.encodingIndex
       }
       break;
     }
@@ -1447,6 +1490,7 @@ async function test(getFullData = true) {
 
     finalVariantPicker = {
       variantPicker: finalVariantPicker.variantPicker,
+      encodingIndex: finalVariantPicker.encodingIndex,
       option_wrappers_with_selectors,
       variantIdField: anchorProductFormData.validNameIdElement,
       observer_container: candidateObject.parent,

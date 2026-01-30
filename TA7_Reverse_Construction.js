@@ -124,7 +124,13 @@ function getParentNodeForVPCSearch(
     candidate = node.parentElement;
   }
 
+  let addToCartButton = null;
+  if(candidate){
+    addToCartButton = candidate.querySelector('button[type=submit]');
+  }
+
   return {
+    addToCartButton,
     parent: candidate,
     isBodyNext: candidate?.parentElement === document.body,
   };
@@ -1523,6 +1529,7 @@ async function test(getFullData = true) {
       option_wrappers_with_selectors,
       variantIdField: anchorProductFormData.validNameIdElement,
       observer_container: candidateObject.parent,
+      addToCartButton: candidateObject.addToCartButton,
       z__camouflage_selectors:
         finalVariantPicker.camouflage_selectors ||
         "Camouflage not enabled on store",

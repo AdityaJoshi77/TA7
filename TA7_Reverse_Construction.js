@@ -676,6 +676,14 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
     return null;
   }
 
+  if((leafNodeSelectorsArr).filter(Boolean).length < optionCount){
+    console.warn({
+      Control_Function : "createVariantPicker()",
+      message: "Leaf selectors count does not match active optionCount"
+    })
+    return null;
+  }
+
   let interParents = [...leafNodeSelectorsArr];
   let flagSelectors = [
     leafNodeSelectorsArr[0],
@@ -693,6 +701,7 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
     ) {
       return null;
     }
+
 
     // move one level up
     const tempParents = interParents
@@ -836,12 +845,23 @@ function createLeafNodeSelectorSets(
     variantPickerKeySets.push(variantPickerKey);
   });
 
-  // console.log({ variantPickerKeySets });
+  console.log({ variantPickerKeySets });
   return variantPickerKeySets;
 }
 
 function isPureLeaf(node, attrSelector) {
-  return !node.querySelector(attrSelector);
+  // return !node.querySelector(attrSelector);
+  return node.tagName.toLowerCase() !== 'fieldset' && !node.querySelector('fieldset');
+
+  // These conditions may be expanded in the future,
+  // We must ensure that we do not select an option_wrapper 
+  // disguised as a selector.
+
+  // NOTE : 
+  // In case of failure where things should have worked as expected, 
+  // have a look at this region: 
+  // isPureLeaf(), makeOVAKeysForOptionAxes(), 
+  // createLeafNodeSelectors(), createVariantPicker()
 }
 
 
@@ -905,7 +925,7 @@ function makeOVAKeysForOptionAxes(
 
       if (selectors.length) {
 
-        // selectors = selectors.filter(selector => isPureLeaf(selector, attributeSelector));
+        selectors = selectors.filter(selector => isPureLeaf(selector, attributeSelector));
 
         if (Object.hasOwn(selectorKey, ova)) {
           selectorKey[ova].push(...selectors);
@@ -1088,7 +1108,7 @@ function getVariantPickerSets(
 
   let finalVariantPickerSet = variantPickerKeySets.map((set) =>
     createVariantPicker(set, optionCount)
-  );
+  ).filter(Boolean);
 
   if (
     !finalVariantPickerSet.length ||

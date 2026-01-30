@@ -676,9 +676,9 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
     return null;
   }
 
-  if((leafNodeSelectorsArr).filter(Boolean).length < optionCount){
+  if ((leafNodeSelectorsArr).filter(Boolean).length < optionCount) {
     console.warn({
-      Control_Function : "createVariantPicker()",
+      Control_Function: "createVariantPicker()",
       message: "Leaf selectors count does not match active optionCount"
     })
     return null;
@@ -851,13 +851,22 @@ function createLeafNodeSelectorSets(
 
 function isPureLeaf(node, attrSelector) {
   // return !node.querySelector(attrSelector);
-  return node.tagName.toLowerCase() !== 'fieldset' && !node.querySelector('fieldset');
+  const blacklistedTags = ['fieldset', 'ul'];
 
+  const tagName = node.tagName.toLowerCase();
+  if (blacklistedTags.includes(tagName)) return false;
+
+  // Reject nodes that CONTAIN structural containers
+  for (const tag of blacklistedTags) {
+    if (node.querySelector(tag)) return false;
+  }
+
+  return true;
   // These conditions may be expanded in the future,
   // We must ensure that we do not select an option_wrapper 
   // disguised as a selector.
 
-  // NOTE : 
+  // NOTE: 
   // In case of failure where things should have worked as expected, 
   // have a look at this region: 
   // isPureLeaf(), makeOVAKeysForOptionAxes(), 
@@ -1393,12 +1402,12 @@ async function test(getFullData = true) {
 
   if (!product) {
     product = await getProductData();
-    product.options = product.options.map((option) => ({
-      name: option.name,
-      // fix this although not necessary
-      // since the logic will eventually be used on active stores.
-      values: [option.values.map((v) => v.name)],
-    }));
+    product = {
+      options: product.options.map((option) => ({
+        name: option.name,
+        values: [option.values],
+      }))
+    }
   }
 
   console.log({ product });

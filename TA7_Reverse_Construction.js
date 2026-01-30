@@ -845,7 +845,7 @@ function isPureLeaf(node, attrSelector) {
 }
 
 
-function makeOVAKeysforOptionAxes(
+function makeOVAKeysForOptionAxes(
   searchNode,
   optionValueRack,
   OPTION_VALUE_ATTRIBUTES
@@ -905,7 +905,7 @@ function makeOVAKeysforOptionAxes(
 
       if (selectors.length) {
 
-        selectors = selectors.filter(selector => isPureLeaf(selector, attributeSelector));
+        // selectors = selectors.filter(selector => isPureLeaf(selector, attributeSelector));
 
         if (Object.hasOwn(selectorKey, ova)) {
           selectorKey[ova].push(...selectors);
@@ -996,7 +996,7 @@ function getVariantPickerSets(
   product
 ) {
   console.log({ optionValueRackSelected: optionValueRack });
-  let { selectorKeys, reduced_ova_array } = makeOVAKeysforOptionAxes(
+  let { selectorKeys, reduced_ova_array } = makeOVAKeysForOptionAxes(
     searchNode,
     optionValueRack,
     OPTION_VALUE_ATTRIBUTES
@@ -1071,7 +1071,7 @@ function getVariantPickerSets(
       optionCount = matchedAxisIndices.length;
     }
 
-    let newSelectorKeyData = makeOVAKeysforOptionAxes(
+    let newSelectorKeyData = makeOVAKeysForOptionAxes(
       searchNode,
       optionValueRack,
       reduced_ova_array

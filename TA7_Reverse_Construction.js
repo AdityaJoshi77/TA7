@@ -125,7 +125,7 @@ function getParentNodeForVPCSearch(
   }
 
   let addToCartButton = null;
-  if(candidate){
+  if (candidate) {
     addToCartButton = candidate.querySelector('button[type=submit]');
   }
 
@@ -1363,207 +1363,201 @@ function getVariantPickersByRevCon(searchNode, product) {
 }
 
 async function test(getFullData = true) {
-  let targetData = {
+  const targetData = {
     A__finalVariantPicker: null,
     B__parentNodeForVPCSearch: null,
     C__anchorData: null,
+    D__variantPickerGenData: null,
   };
 
+  const TA7_Result = {
+    Variant_Picker: null,
+    Full_Data: targetData,
+    status: "failure",
+  };
+
+  const fail = (cause) => {
+    console.error({ status: "[TA7] Failed", cause });
+    return TA7_Result;
+  };
+
+  /* ----------------------------------
+     1. Anchor product form
+  ---------------------------------- */
+
   const anchorProductFormData = findAnchorProductForm();
+  const { anchorProductForm, nameIdAnchors, validNameIdElement } =
+    anchorProductFormData;
 
-  const anchorProductForm = anchorProductFormData.anchorProductForm;
-
-  // Failure to find the anchorProductForm
-  // INFERENCE: Our fundamental assumptions are violated by the theme. (Absolute Failure)
-  if (!anchorProductForm && !anchorProductFormData.nameIdAnchors.length) {
-    console.error({
-      status: "[TA7] Failed",
-      cause: "variantID anchorForm not found",
-    });
-    return targetData;
+  if (!anchorProductForm && !nameIdAnchors.length) {
+    return fail("variantID anchorForm not found");
   }
 
   targetData.C__anchorData = {
-    nameIdElement: anchorProductFormData.validNameIdElement,
+    nameIdElement: validNameIdElement,
     anchorProductForm,
-    nameIdAnchors: anchorProductFormData.nameIdAnchors,
+    nameIdAnchors,
   };
 
-  // GET PRODUCT DATA
-  let product = null,
-    optionNames = null;
-  product = window.CAMOUFLAGEE
-    ? {
-      options: window.CAMOUFLAGEE.items[0].product.options_with_values.map(
-        (option) => ({
-          name: option.name,
-          values: [
-            option.values.map((v) => v.name),
-            option.values.map((v) => v.id),
-          ],
-        })
-      ),
-    }
-    : null;
+  /* ----------------------------------
+     2. Product data
+  ---------------------------------- */
 
-  if (!product) {
-    product = await getProductData();
+  let product = null;
+
+  if (window.CAMOUFLAGEE) {
     product = {
-      options: product.options.map((option) => ({
+      options:
+        window.CAMOUFLAGEE.items[0].product.options_with_values.map(
+          (option) => ({
+            name: option.name,
+            values: [
+              option.values.map((v) => v.name),
+              option.values.map((v) => v.id),
+            ],
+          })
+        ),
+    };
+  } else {
+    const productData = await getProductData();
+    product = {
+      options: productData.options.map((option) => ({
         name: option.name,
         values: [option.values],
-      }))
-    }
+      })),
+    };
   }
 
-  console.log({ product });
-  optionNames = product.options.map((option) => option.name);
+  const optionNames = product.options.map((o) => o.name);
 
-  // Find a stable parent,
-  let anchorHook =
+  /* ----------------------------------
+     3. Stable parent discovery
+  ---------------------------------- */
+
+  const anchorHook =
     anchorProductForm ||
-    anchorProductFormData.nameIdAnchors.find((anchor) =>
+    nameIdAnchors.find((anchor) =>
       isElementVisible(anchor.parentElement)
     );
 
-  let candidateObject;
-  if (anchorHook === anchorProductForm)
-    candidateObject = getParentNodeForVPCSearch(anchorHook, null, false);
-  else candidateObject = getParentNodeForVPCSearch(anchorHook, 5, false);
-  let parentFoundInAnchorMode = true;
+  const candidateObject =
+    anchorHook === anchorProductForm
+      ? getParentNodeForVPCSearch(anchorHook, null, false)
+      : getParentNodeForVPCSearch(anchorHook, 5, false);
 
   targetData.B__parentNodeForVPCSearch = {
     searchNode: candidateObject.parent,
-    parentFoundInAnchorMode,
+    parentFoundInAnchorMode: true,
   };
 
-  let variantPickerGenData = getVariantPickersByRevCon(
+  /* ----------------------------------
+     4. Variant picker candidates
+  ---------------------------------- */
+
+  const variantPickerGenData = getVariantPickersByRevCon(
     candidateObject.parent,
     product
-  ).flat();
+  )?.flat();
 
-  if (!variantPickerGenData) {
-    console.error({
-      status: "[TA7] Failed",
-      cause: "No variant picker candidates found",
-    });
-    return null;
+  if (!variantPickerGenData?.length) {
+    return fail("No variant picker candidates found");
   }
 
   targetData.D__variantPickerGenData = variantPickerGenData;
 
-  console.log({ variantPickerGenData });
+  /* ----------------------------------
+     5. Validation loop
+  ---------------------------------- */
+
   let finalVariantPicker = null;
+
   for (const item of variantPickerGenData) {
-    console.log({ item });
-    const vp_validation_data = isValidVariantPicker(
+    const vpValidationData = isValidVariantPicker(
       item.variant_picker,
       item.optionCount,
       item.optionValueRack,
       item.OPTION_VALUE_ATTRIBUTES
     );
 
-    // no 1:1 mapping in item : DISCARD and continue;
-    if (!vp_validation_data) continue;
+    if (!vpValidationData) continue;
 
-    // true variant picker detected : success
-    const finalSelectorResult = getCorrectVariantPickerWithSelectors(
+    const selectorResult = getCorrectVariantPickerWithSelectors(
       item.variant_picker,
       item.optionCount,
       item.optionValueRack,
       item.encodingIndex,
       product.options,
-      vp_validation_data
+      vpValidationData
     );
 
-    // testing purpose :
-    console.log({ Control_Function: "test()", vp_validation_data });
-
-    if (finalSelectorResult) {
-      item.selectors = finalSelectorResult.selector_data;
-      console.log({ FinalItem: item });
-      finalVariantPicker = {
-        variantPicker: item.variant_picker.variantPicker,
-        option_wrappers: item.variant_picker.option_wrappers,
-        selectors: item.selectors,
-        encodingIndex: item.encodingIndex
-      }
-      break;
-    }
-  }
-
-  // At this very juncture, the final variant picker, the fieldsets, the selectors
-  // are supposed to be detected
-
-  // For cross-checking
-  // REMOVE WHEN READY FOR PRODUCTION.
-  if (window.CAMOUFLAGEE && finalVariantPicker)
-    finalVariantPicker.camouflage_selectors =
-      window.CAMOUFLAGEE.items[0].selectors;
-
-  // Final normalization of the Variant Picker:
-  if (finalVariantPicker) {
-    let option_wrappers_with_selectors = finalVariantPicker.option_wrappers.map(
-      (ow, index) => {
-        let sample_selector = finalVariantPicker.selectors[index].selectors[0];
-        let selector_tagName = sample_selector.tagName.toLowerCase();
-        let selector_type =
-          selector_tagName === "option" ? "select" : selector_tagName;
-        let selectors =
-          selector_type === "select"
-            ? sample_selector.parentElement
-            : finalVariantPicker.selectors[index].selectors;
-
-        return {
-          field_selector: ow,
-          selectors,
-          selector_type,
-          value_attribute: finalVariantPicker.selectors[index].value_attribute,
-        };
-      }
-    );
+    if (!selectorResult) continue;
 
     finalVariantPicker = {
-      variantPicker: finalVariantPicker.variantPicker,
-      encodingIndex: finalVariantPicker.encodingIndex,
-      option_wrappers_with_selectors,
-      variantIdField: anchorProductFormData.validNameIdElement,
-      observer_container: candidateObject.parent,
-      addToCartButton: candidateObject.addToCartButton,
-      z__camouflage_selectors:
-        finalVariantPicker.camouflage_selectors ||
-        "Camouflage not enabled on store",
-    };
-    targetData.A__finalVariantPicker = finalVariantPicker;
-  }
-
-  // confirming product data :
-  console.log({
-    optionNames,
-    optionCount: optionNames.length,
-  });
-
-  if (targetData.A__finalVariantPicker) {
-    let TA7_Success_Object = {
-      "[TA7 VERDICT]": "Success",
-      // Variant_Picker: targetData.A__finalVariantPicker,
+      variantPicker: item.variant_picker.variantPicker,
+      option_wrappers: item.variant_picker.option_wrappers,
+      selectors: selectorResult.selector_data,
+      encodingIndex: item.encodingIndex,
     };
 
-    if (!getFullData) {
-      TA7_Success_Object.Variant_Picker = targetData.A__finalVariantPicker;
-    } else {
-      TA7_Success_Object.Full_Data = targetData;
-    }
-
-    console.log({ TA7_Success_Object });
-    return targetData.A__finalVariantPicker;
+    break;
   }
 
-  console.error({
-    status: "[TA7] Failed",
-    cause: "No variant picker candidates found",
-  });
-  return targetData;
+  /* ----------------------------------
+     6. Failure exit (guaranteed shape)
+  ---------------------------------- */
+
+  if (!finalVariantPicker) {
+    return fail("Final variant picker could not be resolved");
+  }
+
+  /* ----------------------------------
+     7. Normalization
+  ---------------------------------- */
+
+  if (window.CAMOUFLAGEE) {
+    finalVariantPicker.camouflage_selectors =
+      window.CAMOUFLAGEE.items[0].selectors;
+  }
+
+  const option_wrappers_with_selectors =
+    finalVariantPicker.option_wrappers.map((ow, index) => {
+      const sample = finalVariantPicker.selectors[index].selectors[0];
+      const tag = sample.tagName.toLowerCase();
+      const selector_type = tag === "option" ? "select" : tag;
+
+      return {
+        field_selector: ow,
+        selectors:
+          selector_type === "select"
+            ? sample.parentElement
+            : finalVariantPicker.selectors[index].selectors,
+        selector_type,
+        value_attribute:
+          finalVariantPicker.selectors[index].value_attribute,
+      };
+    });
+
+  targetData.A__finalVariantPicker = {
+    variantPicker: finalVariantPicker.variantPicker,
+    encodingIndex: finalVariantPicker.encodingIndex,
+    option_wrappers_with_selectors,
+    variantIdField: validNameIdElement,
+    observer_container: candidateObject.parent,
+    addToCartButton: candidateObject.addToCartButton,
+    z__camouflage_selectors:
+      finalVariantPicker.camouflage_selectors ||
+      "Camouflage not enabled on store",
+  };
+
+  /* ----------------------------------
+     8. Success return
+  ---------------------------------- */
+
+  TA7_Result.Variant_Picker = targetData.A__finalVariantPicker;
+  TA7_Result.status = "success";
+
+  console.log({ "[TA7 VERDICT]": "Success", TA7_Result });
+  return TA7_Result;
 }
 
 await test();

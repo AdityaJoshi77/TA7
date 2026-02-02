@@ -19,6 +19,9 @@ type TA7FinalResult = {
   /** Container used for mutation observation */
   observer_container: HTMLElement;
 
+  /** The add to cart button that could be disabled if a hidden variant is selected */
+  addToCartButton : HTMLElement;
+
   /** Debug / cross-check data from Camouflage (optional) */
   z__camouflage_selectors: unknown | string;
 };

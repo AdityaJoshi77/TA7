@@ -13,11 +13,17 @@ type TA7FinalResult = {
   /** One entry per option axis (Color, Size, etc.) */
   option_wrappers_with_selectors: TA7OptionAxis[];
 
+  /** To inidicate whether a select dropdown needs an initial selection */
+  make_a_selection_required: boolean;
+
+  /** the value_attribute (or the list thereof) to encode the selectors */
+  attribute_name : string | string[];
+
   /** input/select[name="id"] used for variant submission */
   variantIdField: HTMLInputElement | HTMLSelectElement | null;
 
   /** Container used for mutation observation */
-  observer_container: HTMLElement;
+  observer_container_node: HTMLElement;
 
   /** The add to cart button that could be disabled if a hidden variant is selected */
   addToCartButton : HTMLElement;

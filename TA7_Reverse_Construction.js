@@ -739,13 +739,20 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
       let option_wrappers = null;
       if (optionCount > 1) {
         option_wrappers = tempParents.map((temp) => {
-          while (temp.parentElement !== variantPicker)
+          while (temp && temp.parentElement !== variantPicker) {
             temp = temp.parentElement;
+          }
           return temp;
         });
       } else {
-        (option_wrappers = [LCA]), (variantPicker = LCA.parentElement);
+        option_wrappers = [LCA];
+        variantPicker =
+          LCA.parentElement.tagName === 'FIELDSET'
+            ? LCA.parentElement.parentElement
+            : LCA.parentElement;
+        // hardcode for the swatch_king app
       }
+
 
       let mergeVerificationSet = new Set(option_wrappers);
       if (mergeVerificationSet.size < optionCount) {
@@ -1041,6 +1048,7 @@ function getVariantPickerSets(
     reduced_ova_array.some((ova) => Object.hasOwn(selKey, ova))
   );
 
+  let matchedAxisIndices = product.options.map((option,index) => index);
   if (optionCount > 1 && populatedSelectorKeys.length != optionCount) {
     console.warn({
       Control_Function: "Not all fieldsets are present",
@@ -1094,7 +1102,7 @@ function getVariantPickerSets(
      * validation preserves precision.
      */
 
-    let matchedAxisIndices = populatedSelectorKeys.map((psk) => psk.index);
+    matchedAxisIndices = populatedSelectorKeys.map((psk) => psk.index);
     if (matchedAxisIndices.length === 1) {
       optionValueRack =
         product.options[matchedAxisIndices[0]].values[encodingIndex];
@@ -1143,6 +1151,7 @@ function getVariantPickerSets(
       OPTION_VALUE_ATTRIBUTES: reduced_ova_array,
       optionCount,
       optionValueRack,
+      matchedAxisIndices
     };
   })];
 
@@ -1420,15 +1429,20 @@ async function test(getFullData = true) {
     };
   } else {
     const productData = await getProductData();
+
     product = {
       options: productData.options.map((option) => ({
         name: option.name,
         values: [option.values],
       })),
     };
+
+    //debug:
+    console.log({ product });
   }
 
-  const optionNames = product.options.map((o) => o.name);
+  const originalOptionCount = product.options.length;
+  console.log({productOptions : product.options, originalOptionCount});
 
   /* ----------------------------------
      3. Stable parent discovery
@@ -1497,7 +1511,11 @@ async function test(getFullData = true) {
       option_wrappers: item.variant_picker.option_wrappers,
       selectors: selectorResult.selector_data,
       encodingIndex: item.encodingIndex,
+      matchedAxisIndices: item.matchedAxisIndices
     };
+
+    //debug:
+    console.log({vpValidationData});
 
     break;
   }
@@ -1519,30 +1537,55 @@ async function test(getFullData = true) {
       window.CAMOUFLAGEE.items[0].selectors;
   }
 
-  const option_wrappers_with_selectors =
-    finalVariantPicker.option_wrappers.map((ow, index) => {
-      const sample = finalVariantPicker.selectors[index].selectors[0];
-      const tag = sample.tagName.toLowerCase();
-      const selector_type = tag === "option" ? "select" : tag;
+  let templateOptionWrapperObject = {
+    field_selector : null,
+    selectors: [],
+    selector_type: null,
+    make_a_selection_required: null,
+    value_attribute: null
+  }
 
-      return {
-        field_selector: ow,
-        selectors:
-          selector_type === "select"
-            ? sample.parentElement
-            : finalVariantPicker.selectors[index].selectors,
-        selector_type,
-        value_attribute:
-          finalVariantPicker.selectors[index].value_attribute,
-      };
-    });
+  let option_wrappers_with_selectors = new Array(originalOptionCount).fill(templateOptionWrapperObject);
+
+  finalVariantPicker.option_wrappers.forEach((ow, index) => {
+    const sample = finalVariantPicker.selectors[index].selectors[0];
+    const tag = sample.tagName.toLowerCase();
+    const selector_type = tag === "option" ? "select" : tag;
+
+    let returnObject = {
+      field_selector: ow,
+      selectors:
+        selector_type === "select"
+          ? sample.parentElement
+          : finalVariantPicker.selectors[index].selectors,
+      selector_type,
+      make_a_selection_required:
+        selector_type === 'select' && !sample.parentElement.options[0].value,
+      value_attribute:
+        finalVariantPicker.selectors[index].value_attribute,
+    };
+
+    let trueOptionAxisIndex = finalVariantPicker.matchedAxisIndices[index];
+    option_wrappers_with_selectors[trueOptionAxisIndex] = returnObject;
+  });
+
+  // Finalize the value_attribute used (if single) or the value_attribute array
+  // if the selectors in the axes are not encoded with same value_attribute.
+  let valueAttributesUsed = new Set(option_wrappers_with_selectors.map(ow => ow.value_attribute));
+  let attribute_name;
+  if (valueAttributesUsed.size > 1)
+    attribute_name = Array.from(valueAttributesUsed);
+  else
+    attribute_name = valueAttributesUsed.values().next().value;
 
   targetData.A__finalVariantPicker = {
     variantPicker: finalVariantPicker.variantPicker,
     encodingIndex: finalVariantPicker.encodingIndex,
     option_wrappers_with_selectors,
+    make_a_selection_required: option_wrappers_with_selectors.some(ow => ow.make_a_selection_required),
+    attribute_name,
     variantIdField: validNameIdElement,
-    observer_container: candidateObject.parent,
+    observer_container_node: candidateObject.parent,
     addToCartButton: candidateObject.addToCartButton,
     z__camouflage_selectors:
       finalVariantPicker.camouflage_selectors ||

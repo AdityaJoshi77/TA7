@@ -866,6 +866,10 @@ function isPureLeaf(node, attrSelector) {
   // return !node.querySelector(attrSelector);
   const blacklistedTags = ['fieldset', 'ul'];
 
+  // this will prevent inclusion of selectors from hidden variant pickers
+  if (!isElementVisible(node.parentElement))
+    return false;
+
   const tagName = node.tagName.toLowerCase();
   if (blacklistedTags.includes(tagName)) return false;
 
@@ -1442,7 +1446,7 @@ async function test(getFullData = true) {
   }
 
   const originalOptionCount = product.options.length;
-  console.log({productOptions : product.options, originalOptionCount});
+  console.log({ productOptions: product.options, originalOptionCount });
 
   /* ----------------------------------
      3. Stable parent discovery
@@ -1471,13 +1475,16 @@ async function test(getFullData = true) {
   const variantPickerGenData = getVariantPickersByRevCon(
     candidateObject.parent,
     product
-  )?.flat();
+  )?.flat().filter(Boolean);
 
   if (!variantPickerGenData?.length) {
     return fail("No variant picker candidates found");
   }
 
   targetData.D__variantPickerGenData = variantPickerGenData;
+
+  // testing : 
+  console.log({variantPickerGenData});
 
   /* ----------------------------------
      5. Validation loop
@@ -1515,7 +1522,7 @@ async function test(getFullData = true) {
     };
 
     //debug:
-    console.log({vpValidationData});
+    console.log({ vpValidationData });
 
     break;
   }
@@ -1538,7 +1545,7 @@ async function test(getFullData = true) {
   }
 
   let templateOptionWrapperObject = {
-    field_selector : null,
+    field_selector: null,
     selectors: [],
     selector_type: null,
     make_a_selection_required: null,

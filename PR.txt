@@ -1,0 +1,28 @@
+
+Ok, I have made a new script : mixed-types_TA7. Along with this script, I have created a new detection engine TA7_variant_picker_detection. The mixed-types_TA7 has two pipelines - useLegacy() : preserves the behaviour of the earlier mixed-types.js which required hide-oos-query-selectors, hoosObj.integrates_with, window.camouflagePreSelectorSet() function to get the selector data; and the new pipeline is useTA7() which relies on the TA7_variant_picker_detection engine to get the selectors from the product page in a theme agnostic manner. For the new useTA7 pipeline to run, the following conditions have to be true : 
+hoosObj.extras.use_TA7 === true && 
+(
+    params.hide_oos_query_selectors ||
+    hoosObj.integrates_with ||
+    typeof window.camouflagePreSelectorsSet === 'function'
+) === false
+
+So, in order to use the new TA7 logic, ensure the following : set hoosObj.extras.use_TA7 to true,
+DO NOT PROVIDE hide_oos_query_selectors
+DO NOT DEFINE window.camouflagePreSelectorSet() global function
+hoosObj.integrates_with SHOULD NOT BE DEFINED
+if these conditions are not met, mixed-types_TA7 will proceed with normal flow
+
+These are the two new files I have made. 
+
+Apart from this, I have made changes in two functions in the commonV2.js : 
+
+1. oberveVariantInputField(): 
+I have refactored the oberveVariantInputField() function to support both 'legacy' and the 'TA7' modes of the mixed-types_TA7.  The 'legacy' flow has been preserved as it is. For the new 'TA7' flow, following functions have been made : legacyInvalidated(), ta7Invalidated(), shouldRestartByAuthority(). Before the observeVariantInputField() is invoked from either of the two flows, a hoosObj.selectorAuthority flag is set to have a value 'legacy' or 'TA7'. This helps shouldRestartByAuthority() to decide which restart-signal mechanism (ta7Invalidated or legacyInvalidated) will be invoked to set the value of restart flag to true to trigger the mutation observer to launch the selector discovery mechanism (setSelectors()).
+
+2. enableDisabledSelectors():
+Here, I have simply refactored the function to adapt to the new flow. Here I have simply changed how the function was finding the DOM node for the wrapper element of the selectors. Earlier logic used selector.closest(hoosObj.field_selector) to get the wrapper element of the current selector's entire family. TA7 gets the option_wrappers for all the selectors of all the option axis, so closest or querySelector are not used, intead the correct option_wrapper DOM node is simply fetched from the hoosObj.option_wrappers to get the correct wrapper node.
+
+I have tested the script in both modes. I have not noticed any issues so far. The mutation observer is also working fine, and is not restarting violently. The script is working absolutely fine to my knowledge. 
+
+Can you draft all of this in a professional way ? I plan to give this description in my PR.

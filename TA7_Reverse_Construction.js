@@ -539,7 +539,15 @@ function isValidVariantPicker(
       (ova) => {
         let attributeSelector = `[${ova}="${CSS.escape(optionValuesRack[0])}"]`;
         let fs_cand = vp_candidate.option_wrappers[0];
-        return fs_cand.querySelector(attributeSelector);
+        let selectorFound = fs_cand.querySelector(attributeSelector);
+
+        return selectorFound && isElementVisible(selectorFound.parentElement);
+        // why check visibility ? 
+        // To ensure that only an interactable selector is taken into account when verifying 1:1 mapping,
+        // This happens when some option axis of the true variant picker have been hidden,
+        // and the active axis is in some other DOM wrapper,
+        // in this case, the earlier variant picker DOM node becomes the new fs_cand for the active option axis
+        // and including the selector of the hidden option axis can incorrectly fail the 1:1 mapping check.
       }
     );
 
@@ -590,10 +598,17 @@ function isValidVariantPicker(
           optionValuesRack[optionAxisIndex]
         )}"]`;
 
-        let somethingFound = fs_cand.querySelector(attributeSelector);
-        if (somethingFound) {
-          return true;
-        }
+        let selectorFound = fs_cand.querySelector(attributeSelector);
+        console.log({ fs_cand, optionValue: optionValuesRack[optionAxisIndex], selectorFound });
+
+
+        return selectorFound && isElementVisible(selectorFound.parentElement);
+        // why check visibility ? 
+        // To ensure that only an interactable selector is taken into account when verifying 1:1 mapping,
+        // This happens when some option axis of the true variant picker have been hidden,
+        // and the active axis is in some other DOM wrapper,
+        // in this case, the earlier variant picker DOM node becomes the new fs_cand for the active option axis
+        // and including the selector of the hidden option axis can incorrectly fail the 1:1 mapping check. 
       });
 
       if (selectorYieldingOVAList.length > 0) {
@@ -685,7 +700,8 @@ function createVariantPicker(leafNodeSelectorsArr, optionCount) {
   if ((leafNodeSelectorsArr).filter(Boolean).length < optionCount) {
     console.warn({
       Control_Function: "createVariantPicker()",
-      message: "Leaf selectors count does not match active optionCount"
+      message: "Leaf selectors count does not match active optionCount",
+      leafNodeSelectorsArr
     })
     return null;
   }
@@ -948,10 +964,8 @@ function makeOVAKeysForOptionAxes(
       let selectors = Array.from(
         searchNode.querySelectorAll(attributeSelector)
       );
-
+      selectors = selectors.filter(selector => isPureLeaf(selector, attributeSelector));
       if (selectors.length) {
-
-        selectors = selectors.filter(selector => isPureLeaf(selector, attributeSelector));
 
         if (Object.hasOwn(selectorKey, ova)) {
           selectorKey[ova].push(...selectors);
@@ -1052,7 +1066,7 @@ function getVariantPickerSets(
     reduced_ova_array.some((ova) => Object.hasOwn(selKey, ova))
   );
 
-  let matchedAxisIndices = product.options.map((option,index) => index);
+  let matchedAxisIndices = product.options.map((option, index) => index);
   if (optionCount > 1 && populatedSelectorKeys.length != optionCount) {
     console.warn({
       Control_Function: "Not all fieldsets are present",
@@ -1285,6 +1299,10 @@ function getVariantPickersByRevCon(searchNode, product) {
     "aria-label",
     "aria-valuetext",
     // "name",
+
+    // Tier 5 - Custom theme specific attributes (empirical)
+    "data-swatch-option",
+    "data-swatch-value"
   ];
 
   // GET PRODUCT DATA
@@ -1484,7 +1502,7 @@ async function test(getFullData = true) {
   targetData.D__variantPickerGenData = variantPickerGenData;
 
   // testing : 
-  console.log({variantPickerGenData});
+  console.log({ variantPickerGenData });
 
   /* ----------------------------------
      5. Validation loop

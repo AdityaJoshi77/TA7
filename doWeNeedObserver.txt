@@ -1,0 +1,17 @@
+
+So we can do something like this: 
+After the first selector extraction on the page load, we can make a snapshot of the selectors. Then we look at the first variant change, and then wait for a couple of milliseconds before we recheck our snapshot. If our snapshot is invalidated, we set a mutationObserverNeeded boolean flag to true, which prevents the rechecking of the variant change events in the remaining lifecycle of the product page. 
+
+So we will need two flags : 
+1. variantChangeChecked : to tell the script to not check the variant change event if it has been checked once on the first instance
+2. mutationObserverNeeded : to tell the script that mutation observer would be needed, it will be set on the first variant change, and never again.
+
+Whatever decision made on the first run if final for the rest of the lifecycle.
+
+what do you think ? 
+
+"hide_oos_query_selectors" : {
+    "input_selector": "input",
+    "selector_type" : "input"
+    "mainContainer" : ".product__selectors",
+}

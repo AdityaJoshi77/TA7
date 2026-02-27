@@ -34,19 +34,18 @@ function findAnchorProductForm() {
     };
   }
 
-  const productFormRegex = /product[-_]*.*[-_]*form/i;
 
-  let anchorProductForm = null;
+  // DEPRECATED: 
+  // const productFormRegex = /product[-_]*.*[-_]*form/i;
+  // const validNameIdElement = anchors.find((el) => {
+  //   anchorProductForm = findClosestRegexMatchedAncestor(el, productFormRegex);
+  //   return Boolean(anchorProductForm);
+  // });
 
-  const validNameIdElement = anchors.find((el) => {
-    anchorProductForm = findClosestRegexMatchedAncestor(el, productFormRegex);
-
-    return Boolean(anchorProductForm);
-  });
+  const validNameIdElement = anchors.find(anchor => isElementVisible(anchor.parentElement))
 
   return {
     validNameIdElement,
-    anchorProductForm,
     nameIdAnchors: anchors,
   };
 }
@@ -467,29 +466,24 @@ function isValidVariantPicker(
    * - null on failure
    */
 
-  // CHECK 1 : if none of the fs_cand in the vpc are visually present, return null
-  // WHY NOT ENFORCE THE VISIBILITY OF ALL THE FS_CANDs ?
-  // Sometimes, the secondary option axes are hidden by the theme if they have only one option value.
+  /** DEPRECATED : VISIBILITY CONFIRMATION
+     const visually_present_fs_cand_indices = vp_candidate.option_wrappers.reduce(
+      (acc, fs_cand, index) => {
+        if (isElementVisible(fs_cand)) acc.push(index);
+        return acc;
+      },
+      []
+    );
 
-  // PRODUCTION :
-  const visually_present_fs_cand_indices = vp_candidate.option_wrappers.reduce(
-    (acc, fs_cand, index) => {
-      if (isElementVisible(fs_cand)) acc.push(index);
-      return acc;
-    },
-    []
-  );
-
-  if (visually_present_fs_cand_indices.length === 0) {
-    console.log({
-      Control_Function: "isValidVariantPicker()",
-      Failure: "Variant picker is fully invisible",
-      vp_candidate,
-    });
-    return null;
-  }
-
-  // CHECK 2 : the visually present fs_cand set and optionAxes have a 1:1 mapping
+    if (visually_present_fs_cand_indices.length === 0) {
+      console.log({
+        Control_Function: "isValidVariantPicker()",
+        Failure: "Variant picker is fully invisible",
+        vp_candidate,
+      });
+      return null;
+    }
+   */
 
   // ov_attribute filteration :
   // check which ov_attribute are found in each fs_cand (even if visually hidden), remove needless combos
@@ -520,7 +514,9 @@ function isValidVariantPicker(
     return null;
   }
 
-  let selector_yielding_ova_perFsCand = [];
+  // let selector_yielding_ova_perFsCand = [];
+  let selector_yielding_ova_perFsCand = new Array(optionCount).fill(null);
+
 
   // IF optionCount === 1, you don't need to have 1:1 mapping with optionAxes
   // check : 1. the option_wrapper of the vp_candidate must be visible.
@@ -543,7 +539,8 @@ function isValidVariantPicker(
     );
 
     if (selectorYieldingOVAList.length > 0) {
-      selector_yielding_ova_perFsCand.push(selectorYieldingOVAList);
+      // selector_yielding_ova_perFsCand.push(selectorYieldingOVAList);
+      selector_yielding_ova_perFsCand[0] = selectorYieldingOVAList;
       return {
         selector_yielding_ova_perFsCand,
         fieldSet: vp_candidate.option_wrappers[0],
@@ -559,8 +556,9 @@ function isValidVariantPicker(
   // not all the option_wrappers will map 1:1 with the option axes.
 
   let fieldSetMap = new Array(optionCount).fill(-1);
+  let axisOccupied = new Array(optionCount).fill(false);
   let fs_candidates = vp_candidate.option_wrappers;
-  let one2oneMappingDetected = false;
+  // let one2oneMappingDetected = false;
 
   for (
     let fs_cand_index = 0;
@@ -568,19 +566,24 @@ function isValidVariantPicker(
     fs_cand_index++
   ) {
     let fs_cand = fs_candidates[fs_cand_index];
+    let ovaListForCurrentFsCand =
+      ov_attributes_filtered_per_fsCand[fs_cand_index];
+
+    if (!ovaListForCurrentFsCand.length) {
+      // selector_yielding_ova_perFsCand.push([]);
+      // continue;
+      console.warn({
+        Control_Function: "isValidVariantPicker()",
+        error: "Current option_wrapper has no value_attributes",
+        fs_cand
+      });
+      return null;
+    }
     for (
       let optionAxisIndex = 0;
       optionAxisIndex < optionValuesRack.length;
       optionAxisIndex++
     ) {
-      let ovaListForCurrentFsCand =
-        ov_attributes_filtered_per_fsCand[fs_cand_index];
-
-      if (!ovaListForCurrentFsCand.length) {
-        selector_yielding_ova_perFsCand.push([]);
-        continue;
-      }
-
       let selectorYieldingOVAList =
         ov_attributes_filtered_per_fsCand[fs_cand_index];
 
@@ -603,29 +606,38 @@ function isValidVariantPicker(
       });
 
       if (selectorYieldingOVAList.length > 0) {
-        if (fieldSetMap[fs_cand_index] === -1) {
-          one2oneMappingDetected = true;
+        if (!axisOccupied[optionAxisIndex] && fieldSetMap[fs_cand_index] === -1) {
+          // one2oneMappingDetected = true;
           fieldSetMap[fs_cand_index] = optionAxisIndex;
-          selector_yielding_ova_perFsCand.push(selectorYieldingOVAList);
+          axisOccupied[optionAxisIndex] = true;
+          // selector_yielding_ova_perFsCand.push(selectorYieldingOVAList);
+          selector_yielding_ova_perFsCand[fs_cand_index] = selectorYieldingOVAList;
 
-          if (isNumericString(optionValuesRack[optionAxisIndex])) {
-            break;
-          }
-        } else {
-          console.log({
-            "isValidVariantPicker()": "1:1 mapping failed",
-            fs_cand: fs_candidates[fs_cand_index],
-            vp_candidate,
-          });
-          return null;
+          // axis mapped with the wrapper, 1:1 mapping was ensured earlier during DFS + LCA phase
+          // so just move the next fs_cand. 
+          break;
+
+          // if (isNumericString(optionValuesRack[optionAxisIndex])) {
+          //   break;
+          // }
         }
+
+        // DEPRECATED : FALSE FAILURE OF 1:1 MAPPING.
+        // else {
+        //   console.log({
+        //     "isValidVariantPicker()": "1:1 mapping failed",
+        //     fs_cand: fs_candidates[fs_cand_index],
+        //     vp_candidate,
+        //   });
+        //   return null;
+        // }
       }
     }
   }
 
   // If no fs_cand was 1:1 mapped with the option axes
   // return null
-  if (!one2oneMappingDetected) {
+  if (fieldSetMap.some(v => v === -1)) {
     console.warn({
       Control_Function: "isValidVariantPicker()",
       message: "No 1:1 mapping detected",
@@ -641,14 +653,6 @@ function isValidVariantPicker(
   };
 
   return vp_validation_data;
-}
-
-function isNumericString(value) {
-  return (
-    typeof value === "string" &&
-    value.trim() !== "" &&
-    !Number.isNaN(Number(value))
-  );
 }
 
 function createVariantPicker(leafNodeSelectorsArr, optionCount) {
@@ -884,99 +888,18 @@ function createLeafNodeSelectorsSets(
     // the interArrSet is the group of all the intermediate arrays in the collection
     // these are the selectors for the option values enclosed by the first and the last value in the rack.
     let interArrSet = collection.filter((arr, idx, collection) => (idx > 0 && idx < collection.length - 1));
-    console.log({interArrSet});
-    let variantPickerKey = variantPickerKeyBuilder(0, interArrSet, [], firstSelector, lastSelector,optionCount);
+    console.log({ interArrSet });
+    let variantPickerKey = variantPickerKeyBuilder(0, interArrSet, [], firstSelector, lastSelector, optionCount);
 
-    if(variantPickerKey){
+    if (variantPickerKey) {
       variantPickerKeySets.push(variantPickerKey);
-      console.log({variantPickerKey});
+      console.log({ variantPickerKey });
     }
   })
 
   return variantPickerKeySets;
 }
 
-function createLeafNodeSelectorSetsOld(
-  selectorKeys,
-  reduced_ova_array,
-  optionCount
-) {
-  /** DESCRIPTION:
-   * Generates coherent sets of leaf DOM nodes that represent
-   * one possible instantiation of a variant picker.
-   *
-   * MENTAL MODEL:
-   * Each option axis may be encoded using the same attribute
-   * (e.g. data-value) but multiple elements may match.
-   *
-   * This function constructs selector combinations such that:
-   * - Each option axis contributes exactly one leaf node
-   * - No two axes reuse the same DOM element
-   *
-   * PROCESS:
-   * - Iterate over each viable option-value attribute
-   * - For that attribute:
-   *   • Select one DOM node per option axis
-   *   • Ensure uniqueness via index tracking
-   *
-   * WHY THIS EXISTS:
-   * Variant pickers often reuse attributes across axes.
-   * We must explore valid combinations without collisions.
-   *
-   * OUTPUT:
-   * - An array of selector sets
-   *   Each set is a candidate “leaf representation” of a variant picker
-   *
-   * CRITICAL INVARIANT:
-   * Each returned set can theoretically represent a real variant picker.
-   * Invalid combinations are filtered later.
-   */
-
-  // console.log({ rawSetectorKeys: selectorKeys, reduced_ova_array });
-  let variantPickerKeySets = [];
-
-  if (optionCount === 1) {
-    reduced_ova_array.forEach((ova) => {
-      let variantPickerKey = [];
-      selectorKeys.forEach((selectorKey) => {
-        if (!Object.hasOwn(selectorKey, ova) || !selectorKey[ova].length) {
-          return;
-        }
-        variantPickerKey.push(selectorKey[ova][0]);
-      })
-      variantPickerKeySets.push(variantPickerKey);
-    })
-
-    console.log({ variantPickerKeySets });
-    return variantPickerKeySets;
-  }
-
-  // when optionCount > 1;
-  reduced_ova_array.forEach((ova) => {
-    let variantPickerKey = [];
-    let occupiedIndexSet = new Set();
-    selectorKeys.forEach((selectorKey) => {
-      if (!Object.hasOwn(selectorKey, ova) || !selectorKey[ova].length) {
-        return;
-      }
-      let firstAvailIndex = selectorKey[ova].findIndex(
-        (val, index) => !occupiedIndexSet.has(index)
-      );
-
-      if (firstAvailIndex === -1) {
-        variantPickerKey = null;
-        return;
-      }
-
-      occupiedIndexSet.add(firstAvailIndex);
-      variantPickerKey.push(selectorKey[ova][firstAvailIndex]);
-    });
-    variantPickerKeySets.push(variantPickerKey);
-  });
-
-  console.log({ variantPickerKeySets });
-  return variantPickerKeySets;
-}
 
 function isPureLeaf(node, attrSelector) {
   // return !node.querySelector(attrSelector);
@@ -1112,7 +1035,7 @@ function selectorEncodingValidator(
       let attributeSelector = `[${ova}="${CSS.escape(optionValueLiteral)}"]`;
       let selectorFound = searchNode.querySelector(attributeSelector);
 
-      if (selectorFound) {
+      if (selectorFound && isElementVisible(selectorFound.parentElement)) {
         console.log({
           ova,
           selectorFound,
@@ -1133,7 +1056,7 @@ function selectorEncodingValidator(
       let optionValueId = optionValueRack_id[i];
       let attributeSelector = `[${ova}="${CSS.escape(optionValueId)}"]`;
       let selectorFound = searchNode.querySelector(attributeSelector);
-      if (selectorFound) {
+      if (selectorFound && isElementVisible(selectorFound.parentElement)) {
         console.log({
           ova,
           selectorFound,
@@ -1259,6 +1182,7 @@ function getVariantPickerSets(
         product.options[matchedAxisIndices[0]].values[encodingIndex];
 
       optionCount = 1;
+      console.log({ optionValueRack, optionCount });
 
     } else {
 
@@ -1594,7 +1518,7 @@ function makeOptionWrappersWithSelectors(finalVariantPicker, originalOptionCount
 }
 
 
-function restartTA7WithCache(variantPickerCache) {
+function run_TA7WithCache(variantPickerCache) {
   let {
     searchNode,
     variantIdField,
@@ -1603,58 +1527,157 @@ function restartTA7WithCache(variantPickerCache) {
     effectiveOptionCount,
     encodingIndex,
     finalOVAArrayUsed,
+    matchedAxisIndices,
     originalOptionCount,
-    productOptions
+    productOptions,
   } = variantPickerCache;
 
-  if (!searchNode.isConnected)
+  /* ----------------------------------
+     1. searchNode still alive?
+  ---------------------------------- */
+  if (!searchNode || !searchNode.isConnected) {
+    console.error("[TA7 CACHE FAIL] searchNode not connected", { searchNode });
     return null;
+  }
 
-  if (!variantIdField.isConnected)
-    variantIdField = Array.from(searchNode.querySelectorAll('input[name="id"], select[name="id"]')).find(vif => isElementVisible(vif.parentElement));
+  /* ----------------------------------
+     2. variantIdField still alive?
+  ---------------------------------- */
+  if (!variantIdField || !variantIdField.isConnected) {
+    console.warn("[TA7 CACHE] variantIdField disconnected. Attempting re-query...");
+    variantIdField = Array.from(
+      searchNode.querySelectorAll('input[name="id"], select[name="id"]'),
+    ).find(vif => isElementVisible(vif.parentElement));
 
-  const leafNodeSelectorsArr = leafNodeAttributeSelectorsArr.map((attrSelector, attIdx) => {
-    let tempSelectorArray = Array.from(searchNode.querySelectorAll(attrSelector));
-    if (tempSelectorArray.length === 1)
-      return tempSelectorArray[0];
-    else {
-      let identicalAttrSelectors = leafNodeAttributeSelectorsArr.reduce((acc, attSel, index) => {
-        if (attSel === attrSelector)
-          acc.push(index);
-        return acc;
-      }, [])
-
-      let resolvedIndex = identicalAttrSelectors.findIndex(idx => idx === attIdx);
-      return tempSelectorArray[resolvedIndex];
+    if (!variantIdField) {
+      console.error("[TA7 CACHE FAIL] Could not re-resolve variantIdField");
+      return null;
     }
-  })
+  }
 
-  if (effectiveOptionCount > 1 && leafNodeSelectorsArr.length !== effectiveOptionCount)
+  /* --------------------------------------------------------------------
+     3. Reconstruct a valid variant picker key from the leaf attribute selectors
+  -------------------------------------------------------------------- */
+  const allSelectorsForEachOptionValue = leafNodeAttributeSelectorsArr.map(attSel => [...[...searchNode.querySelectorAll(attSel)].filter(selector => isElementVisible(selector.parentElement))]);
+
+  if (allSelectorsForEachOptionValue.some(arr => !arr.length)) {
+    console.error("[TA7 CACHE FAIL] Missing selectors during reconstruction");
     return null;
-  else if (leafNodeSelectorsArr.length !== effectiveOptionValueRack.length)
+  }
+
+  const firstSelector = allSelectorsForEachOptionValue[0][0];
+  const lastSelector = allSelectorsForEachOptionValue.at(-1).at(-1);
+
+  let variantPickerKey;
+  if (allSelectorsForEachOptionValue.length === 2) {
+    variantPickerKey = [firstSelector, lastSelector];
+  } else {
+    let interArrSet = allSelectorsForEachOptionValue.filter((selectorArray, idx, collection) => idx > 0 && idx < collection.length - 1);
+
+    variantPickerKey = variantPickerKeyBuilder(0, interArrSet, [], firstSelector, lastSelector, effectiveOptionCount);
+
+    if (!variantPickerKey) {
+      console.error({
+        Control_Function: "run_TA7WithCache()",
+        error: "Failed to build variant picker key",
+      });
+      return null;
+    }
+  }
+
+  /* ----------------------------------
+     4. Rebuild variant picker
+  ---------------------------------- */
+  const variant_picker = createVariantPicker(
+    variantPickerKey,
+    effectiveOptionCount,
+  );
+
+  if (!variant_picker) {
+    console.error("[TA7 CACHE FAIL] createVariantPicker returned null");
     return null;
+  }
 
-  const variant_picker = createVariantPicker(leafNodeSelectorsArr, effectiveOptionCount);
 
-  if (!variant_picker)
+  /* ----------------------------------
+     5. Validate reconstructed picker
+  ---------------------------------- */
+  let vp_validation_data = isValidVariantPicker(
+    variant_picker,
+    effectiveOptionCount,
+    effectiveOptionValueRack,
+    finalOVAArrayUsed,
+  );
+
+  if (!vp_validation_data) {
+    console.error("[TA7 CACHE FAIL] isValidVariantPicker failed");
     return null;
+  }
 
-  let vp_validation_data = isValidVariantPicker(variant_picker, effectiveOptionCount, effectiveOptionValueRack, finalOVAArrayUsed);
+  /* ----------------------------------
+     7. Extract final selectors
+  ---------------------------------- */
+  let selectorResult = getCorrectVariantPickerWithSelectors(
+    variant_picker,
+    effectiveOptionCount,
+    effectiveOptionValueRack,
+    encodingIndex,
+    productOptions,
+    vp_validation_data,
+  );
 
-  if (!vp_validation_data)
+  if (!selectorResult) {
+    console.error("[TA7 CACHE FAIL] getCorrectVariantPickerWithSelectors failed");
     return null;
+  }
 
-  let selectorResult = getCorrectVariantPickerWithSelectors(variant_picker, effectiveOptionCount, effectiveOptionValueRack, encodingIndex, productOptions, vp_validation_data);
-
-  if (!selectorResult)
-    return null;
-
+  /* ----------------------------------
+     8. Final assembly
+  ---------------------------------- */
   let finalVariantPicker = {
     variantPicker: variant_picker,
     option_wrappers: variant_picker.option_wrappers,
     selectors: selectorResult.selector_data,
     variantIdField,
+    matchedAxisIndices,
   };
+
+  /* --------------------------------------------------------------------
+    9. Safety check of the matchedAxisIndices, in case axis ordering collapses.
+ -------------------------------------------------------------------- */
+  if (!matchedAxisIndices || matchedAxisIndices.length !== effectiveOptionCount) {
+    console.error("[TA7 CACHE FAIL] matchedAxisIndices mismatch", {
+      matchedAxisIndices,
+      effectiveOptionCount,
+    });
+    return null;
+  }
+
+  let option_wrappers_with_selectors = makeOptionWrappersWithSelectors(finalVariantPicker, originalOptionCount);
+
+  if (!option_wrappers_with_selectors?.length) {
+    console.error("[TA7 CACHE FAIL] makeOptionWrappersWithSelectors returned empty");
+    return null;
+  }
+
+  finalVariantPicker.option_wrappers_with_selectors = option_wrappers_with_selectors;
+
+  // make_a_selection_required
+  finalVariantPicker.make_a_selection_required = option_wrappers_with_selectors.some(ow => ow.make_a_selection_required);
+
+  // Finalize the value_attribute used (if single) or the value_attribute array
+  // if the selectors in the axes are not encoded with same value_attribute.
+  let valueAttributesUsed = new Set(option_wrappers_with_selectors.map(ow => ow.value_attribute));
+  let attribute_name;
+  if (valueAttributesUsed.size > 1) {
+    attribute_name = Array.from(valueAttributesUsed);
+  } else {
+    attribute_name = valueAttributesUsed.values().next().value;
+  }
+  finalVariantPicker.attribute_name = attribute_name;
+
+  console.log("[TA7 CACHE SUCCESS] Fast reconstruction successful");
+  return finalVariantPicker;
 }
 
 async function test(getFullData = true) {
@@ -1672,7 +1695,7 @@ async function test(getFullData = true) {
   };
 
   const fail = (cause) => {
-    console.error({ status: "[TA7] Failed", cause });
+    console.error({ status: "[TA7] Failed : Revert to Legacy", cause });
     return TA7_Result;
   };
 
@@ -1681,16 +1704,15 @@ async function test(getFullData = true) {
   ---------------------------------- */
 
   const anchorProductFormData = findAnchorProductForm();
-  const { anchorProductForm, nameIdAnchors, validNameIdElement } =
+  let { nameIdAnchors, validNameIdElement } =
     anchorProductFormData;
 
-  if (!anchorProductForm && !nameIdAnchors.length) {
-    return fail("variantID anchorForm not found");
+  if (!validNameIdElement) {
+    return fail("valid [name = id] element not found");
   }
 
   targetData.C__anchorData = {
     nameIdElement: validNameIdElement,
-    anchorProductForm,
     nameIdAnchors,
   };
 
@@ -1734,16 +1756,7 @@ async function test(getFullData = true) {
      3. Stable parent discovery
   ---------------------------------- */
 
-  const anchorHook =
-    anchorProductForm ||
-    nameIdAnchors.find((anchor) =>
-      isElementVisible(anchor.parentElement)
-    );
-
-  const candidateObject =
-    anchorHook === anchorProductForm
-      ? getParentNodeForVPCSearch(anchorHook, null, false)
-      : getParentNodeForVPCSearch(anchorHook, 5, false);
+  const candidateObject = getParentNodeForVPCSearch(validNameIdElement, 5, false);
 
   targetData.B__parentNodeForVPCSearch = {
     searchNode: candidateObject.parent,
@@ -1858,8 +1871,9 @@ async function test(getFullData = true) {
       effectiveOptionCount,
       encodingIndex,
       finalOVAArrayUsed,
+      matchedAxisIndices: finalVariantPicker.matchedAxisIndices,
       originalOptionCount,
-      productOptions: product.options
+      productOptions: product.options,
     },
     encodingIndex: finalVariantPicker.encodingIndex,
     option_wrappers_with_selectors,
@@ -1879,6 +1893,7 @@ async function test(getFullData = true) {
 
   TA7_Result.Variant_Picker = targetData.A__finalVariantPicker;
   TA7_Result.status = "success";
+  TA7_Result.CacheResponse = run_TA7WithCache(TA7_Result.Variant_Picker.variantPickerCache);
 
   console.log({ "[TA7 VERDICT]": "Success", TA7_Result });
   return TA7_Result;

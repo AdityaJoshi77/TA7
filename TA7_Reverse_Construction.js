@@ -1,3 +1,9 @@
+
+
+// module level WeakSet for node list to be rejected since they aren't selectors but wrap them.
+let rejectedSelectorWrapper = new WeakSet();
+let globalFlagForCacheUse = false;
+
 // HELPER:
 // Find the theme invariant - input/select with name = id.
 // Most shopify themes need an html element which will hold the id of the current variant
@@ -260,7 +266,14 @@ function generateSelectorsfromOpexKeys(optionExtractionKeys) {
           optionValue
         )}"]`;
 
-        let el = fs_cand.querySelector(attributeSelector);
+        let matches = [...fs_cand.querySelectorAll(attributeSelector)];
+        let el;
+        if(!globalFlagForCacheUse){
+          el = matches.find(node => !rejectedSelectorWrapper.has(node));
+        } else {
+          el = matches.find(node => !node.querySelector(attributeSelector));
+        }
+          
         if (el) selectorSet.add(el);
       }
 
@@ -396,7 +409,8 @@ function returnBestSelectorSet(selectorSetArray) {
    * This heuristic helps pick the most semantically relevant one.
    *
    **/
-  let selectorPriorityList_flat = [
+  let selectorPriorityList = [
+    // Tier 1 — native interactive
     "input",
     "option",
     "button",
@@ -404,6 +418,21 @@ function returnBestSelectorSet(selectorSetArray) {
     "li",
     "div",
     "label",
+
+    // Tier 2 — semantic containers
+    "ul",
+    "fieldset",
+
+    // Tier 3 — custom UI containers
+    "span",
+    "p",
+    "strong",
+
+    // Tier 4 — media & visual selectors
+    "img",
+    "picture",
+    "svg",
+    "path"
   ];
 
   let selectorCandidatesList = selectorSetArray.map((selectorSet, index) => {
@@ -417,7 +446,7 @@ function returnBestSelectorSet(selectorSetArray) {
   // get the priority level of each selector set.
   for (let selectorCandidate of selectorCandidatesList) {
     let selectorRep = selectorCandidate.selectorRep;
-    selectorCandidate.selProListIndex = selectorPriorityList_flat.findIndex(
+    selectorCandidate.selProListIndex = selectorPriorityList.findIndex(
       (tag) => tag === selectorRep
     );
   }
@@ -903,32 +932,19 @@ function createLeafNodeSelectorsSets(
 
 function isPureLeaf(node, attrSelector) {
   // return !node.querySelector(attrSelector);
-  const blacklistedTags = ['fieldset', 'ul'];
-
   // this will prevent inclusion of selectors from hidden variant pickers
   if (!isElementVisible(node.parentElement)) {
     console.log({ node, message: "selector is not visible" });
     return false;
   }
 
-  const tagName = node.tagName.toLowerCase();
-  if (blacklistedTags.includes(tagName)) return false;
-
-  // Reject nodes that CONTAIN structural containers
-  for (const tag of blacklistedTags) {
-    if (node.querySelector(tag)) return false;
+  if (node.querySelector(attrSelector)) {
+    console.log({ node, message: "the node is a wrapper of true selector" });
+    rejectedSelectorWrapper.add(node);
+    return false;
   }
 
   return true;
-  // These conditions may be expanded in the future,
-  // We must ensure that we do not select an option_wrapper 
-  // disguised as a selector.
-
-  // NOTE: 
-  // In case of failure where things should have worked as expected, 
-  // have a look at this region: 
-  // isPureLeaf(), makeOVAKeysForOptionAxes(), 
-  // createLeafNodeSelectors(), createVariantPicker()
 }
 
 
@@ -972,51 +988,37 @@ function makeOVAKeysForOptionAxes(
    * Everything downstream relies on this fact.
    */
 
-  let reduced_ova_array = OPTION_VALUE_ATTRIBUTES;
-  let temp_ova_set = new Set();
+  let reduced_ova_set = new Set();
   let selectorKeys = [];
-
-  // Before proceeding, ensure the validity of the optionValueRack.
 
   optionValueRack.forEach((optionValue, index) => {
     let selectorKey = {
       A1__optionValue: optionValue,
       index,
     };
-    console.log(`Picked Option Value ${optionValue}`);
-    reduced_ova_array.forEach((ova) => {
-      let attributeSelector = `[${ova}="${CSS.escape(optionValue)}"]`;
+
+    OPTION_VALUE_ATTRIBUTES.forEach((ova) => {
+      const attributeSelector = `[${ova}="${CSS.escape(optionValue)}"]`;
+
       let selectors = Array.from(
         searchNode.querySelectorAll(attributeSelector)
-      );
-      selectors = selectors.filter(selector => isPureLeaf(selector, attributeSelector));
-      if (selectors.length) {
+      ).filter(selector => isPureLeaf(selector, attributeSelector));
 
-        if (Object.hasOwn(selectorKey, ova)) {
-          selectorKey[ova].push(...selectors);
-        } else {
-          temp_ova_set.add(ova);
-          selectorKey[ova] = [];
-          selectorKey[ova].push(...selectors);
-        }
+      if (selectors.length) {
+        reduced_ova_set.add(ova); // accumulate globally
+
+        if (!selectorKey[ova]) selectorKey[ova] = [];
+        selectorKey[ova].push(...selectors);
       }
     });
 
-    if (temp_ova_set.size) {
-      // Array.from(temp_ova_set).forEach(ova => {
-      //   if( !reduced_ova_array.includes(ova) )
-      //     reduced_ova_array.push(ova);
-      // })
-
-      reduced_ova_array = Array.from(temp_ova_set);
-    }
-    temp_ova_set.clear();
     selectorKeys.push(selectorKey);
   });
 
-  console.log({ ovaKeyForOptionAxes: selectorKeys });
-
-  return { selectorKeys, reduced_ova_array };
+  return {
+    selectorKeys,
+    reduced_ova_array: Array.from(reduced_ova_set),
+  };
 }
 
 function selectorEncodingValidator(
@@ -1532,17 +1534,21 @@ function run_TA7WithCache(variantPickerCache) {
     productOptions,
   } = variantPickerCache;
 
-  /* ----------------------------------
-     1. searchNode still alive?
-  ---------------------------------- */
-  if (!searchNode || !searchNode.isConnected) {
-    console.error("[TA7 CACHE FAIL] searchNode not connected", { searchNode });
+  rejectedSelectorWrapper = new WeakSet();
+  globalFlagForCacheUse = true;
+
+  function failCache(reason, extra = {}) {
+    console.error("[TA7 CACHE FAIL]", reason, extra);
+    globalFlagForCacheUse = false;
     return null;
   }
 
-  /* ----------------------------------
-     2. variantIdField still alive?
-  ---------------------------------- */
+  /* 1. searchNode still alive? */
+  if (!searchNode || !searchNode.isConnected) {
+    return failCache("searchNode not connected", { searchNode });
+  }
+
+  /* 2. variantIdField still alive? */
   if (!variantIdField || !variantIdField.isConnected) {
     console.warn("[TA7 CACHE] variantIdField disconnected. Attempting re-query...");
     variantIdField = Array.from(
@@ -1550,19 +1556,30 @@ function run_TA7WithCache(variantPickerCache) {
     ).find(vif => isElementVisible(vif.parentElement));
 
     if (!variantIdField) {
-      console.error("[TA7 CACHE FAIL] Could not re-resolve variantIdField");
-      return null;
+      return failCache("Could not re-resolve variantIdField");
     }
   }
 
-  /* --------------------------------------------------------------------
-     3. Reconstruct a valid variant picker key from the leaf attribute selectors
-  -------------------------------------------------------------------- */
-  const allSelectorsForEachOptionValue = leafNodeAttributeSelectorsArr.map(attSel => [...[...searchNode.querySelectorAll(attSel)].filter(selector => isElementVisible(selector.parentElement))]);
+  /* 3. Reconstruct selectors */
+  let allSelectorsForEachOptionValue = leafNodeAttributeSelectorsArr.map(attSel => [...searchNode.querySelectorAll(attSel)]);
+
+  allSelectorsForEachOptionValue = allSelectorsForEachOptionValue.map((selArray, idx) =>
+    selArray.filter(selector => {
+      if (!isElementVisible(selector.parentElement)) return false;
+
+      if (selector.querySelector(leafNodeAttributeSelectorsArr[idx])) {
+        rejectedSelectorWrapper.add(selector);
+        return false;
+      }
+
+      return true;
+    })
+  );
 
   if (allSelectorsForEachOptionValue.some(arr => !arr.length)) {
-    console.error("[TA7 CACHE FAIL] Missing selectors during reconstruction");
-    return null;
+    return failCache("Missing selectors during reconstruction", {
+      leafNodeAttributeSelectorsArr
+    });
   }
 
   const firstSelector = allSelectorsForEachOptionValue[0][0];
@@ -1572,36 +1589,35 @@ function run_TA7WithCache(variantPickerCache) {
   if (allSelectorsForEachOptionValue.length === 2) {
     variantPickerKey = [firstSelector, lastSelector];
   } else {
-    let interArrSet = allSelectorsForEachOptionValue.filter((selectorArray, idx, collection) => idx > 0 && idx < collection.length - 1);
+    let interArrSet = allSelectorsForEachOptionValue.filter((_, idx, collection) =>
+      idx > 0 && idx < collection.length - 1
+    );
 
-    variantPickerKey = variantPickerKeyBuilder(0, interArrSet, [], firstSelector, lastSelector, effectiveOptionCount);
+    variantPickerKey = variantPickerKeyBuilder(
+      0,
+      interArrSet,
+      [],
+      firstSelector,
+      lastSelector,
+      effectiveOptionCount,
+    );
 
     if (!variantPickerKey) {
-      console.error({
-        Control_Function: "run_TA7WithCache()",
-        error: "Failed to build variant picker key",
-      });
-      return null;
+      return failCache("Failed to build variant picker key");
     }
   }
 
-  /* ----------------------------------
-     4. Rebuild variant picker
-  ---------------------------------- */
+  /* 4. Rebuild variant picker */
   const variant_picker = createVariantPicker(
     variantPickerKey,
     effectiveOptionCount,
   );
 
   if (!variant_picker) {
-    console.error("[TA7 CACHE FAIL] createVariantPicker returned null");
-    return null;
+    return failCache("createVariantPicker returned null");
   }
 
-
-  /* ----------------------------------
-     5. Validate reconstructed picker
-  ---------------------------------- */
+  /* 5. Validate reconstructed picker */
   let vp_validation_data = isValidVariantPicker(
     variant_picker,
     effectiveOptionCount,
@@ -1610,13 +1626,10 @@ function run_TA7WithCache(variantPickerCache) {
   );
 
   if (!vp_validation_data) {
-    console.error("[TA7 CACHE FAIL] isValidVariantPicker failed");
-    return null;
+    return failCache("isValidVariantPicker failed");
   }
 
-  /* ----------------------------------
-     7. Extract final selectors
-  ---------------------------------- */
+  /* 6. Extract selectors */
   let selectorResult = getCorrectVariantPickerWithSelectors(
     variant_picker,
     effectiveOptionCount,
@@ -1627,54 +1640,46 @@ function run_TA7WithCache(variantPickerCache) {
   );
 
   if (!selectorResult) {
-    console.error("[TA7 CACHE FAIL] getCorrectVariantPickerWithSelectors failed");
-    return null;
+    return failCache("getCorrectVariantPickerWithSelectors failed");
   }
 
-  /* ----------------------------------
-     8. Final assembly
-  ---------------------------------- */
+  /* 7. Safety check */
+  if (!matchedAxisIndices || matchedAxisIndices.length !== effectiveOptionCount) {
+    return failCache("matchedAxisIndices mismatch", {
+      matchedAxisIndices,
+      effectiveOptionCount,
+    });
+  }
+
+  let option_wrappers_with_selectors = makeOptionWrappersWithSelectors(
+    {
+      option_wrappers: variant_picker.option_wrappers,
+      selectors: selectorResult.selector_data,
+      matchedAxisIndices,
+    },
+    originalOptionCount,
+  );
+
+  if (!option_wrappers_with_selectors?.length) {
+    return failCache("makeOptionWrappersWithSelectors returned empty");
+  }
+
+  /* SUCCESS PATH */
   let finalVariantPicker = {
     variantPicker: variant_picker,
     option_wrappers: variant_picker.option_wrappers,
     selectors: selectorResult.selector_data,
     variantIdField,
     matchedAxisIndices,
+    option_wrappers_with_selectors,
+    make_a_selection_required: option_wrappers_with_selectors.some(ow => ow.make_a_selection_required),
   };
 
-  /* --------------------------------------------------------------------
-    9. Safety check of the matchedAxisIndices, in case axis ordering collapses.
- -------------------------------------------------------------------- */
-  if (!matchedAxisIndices || matchedAxisIndices.length !== effectiveOptionCount) {
-    console.error("[TA7 CACHE FAIL] matchedAxisIndices mismatch", {
-      matchedAxisIndices,
-      effectiveOptionCount,
-    });
-    return null;
-  }
-
-  let option_wrappers_with_selectors = makeOptionWrappersWithSelectors(finalVariantPicker, originalOptionCount);
-
-  if (!option_wrappers_with_selectors?.length) {
-    console.error("[TA7 CACHE FAIL] makeOptionWrappersWithSelectors returned empty");
-    return null;
-  }
-
-  finalVariantPicker.option_wrappers_with_selectors = option_wrappers_with_selectors;
-
-  // make_a_selection_required
-  finalVariantPicker.make_a_selection_required = option_wrappers_with_selectors.some(ow => ow.make_a_selection_required);
-
-  // Finalize the value_attribute used (if single) or the value_attribute array
-  // if the selectors in the axes are not encoded with same value_attribute.
   let valueAttributesUsed = new Set(option_wrappers_with_selectors.map(ow => ow.value_attribute));
-  let attribute_name;
-  if (valueAttributesUsed.size > 1) {
-    attribute_name = Array.from(valueAttributesUsed);
-  } else {
-    attribute_name = valueAttributesUsed.values().next().value;
-  }
-  finalVariantPicker.attribute_name = attribute_name;
+  finalVariantPicker.attribute_name =
+    valueAttributesUsed.size > 1
+      ? Array.from(valueAttributesUsed)
+      : valueAttributesUsed.values().next().value;
 
   console.log("[TA7 CACHE SUCCESS] Fast reconstruction successful");
   return finalVariantPicker;
@@ -1698,6 +1703,11 @@ async function test(getFullData = true) {
     console.error({ status: "[TA7] Failed : Revert to Legacy", cause });
     return TA7_Result;
   };
+
+  /* ----------------------------------
+     0. Clear rejected nodes cache
+  ---------------------------------- */
+  rejectedSelectorWrapper = new WeakSet();
 
   /* ----------------------------------
      1. Anchor product form

@@ -2,7 +2,7 @@
 
 // module level WeakSet for node list to be rejected since they aren't selectors but wrap them.
 let rejectedSelectorWrapper = new WeakSet();
-let globalFlagForCacheUse = false;
+let globalCacheData = null;
 
 // HELPER:
 // Find the theme invariant - input/select with name = id.
@@ -224,6 +224,7 @@ function generateOptionExtractionKeys(
   vp_validation_data
 ) {
   let optionExtractionKeys = []; // used for selector assortment as per data-* value
+  console.log({vp_validation_data});
 
   if (optionCount > 1) {
     optionExtractionKeys = vp_validation_data.fieldSetMap.map(
@@ -249,7 +250,7 @@ function generateOptionExtractionKeys(
 }
 
 function generateSelectorsfromOpexKeys(optionExtractionKeys) {
-  let finalSelectorSet = optionExtractionKeys.map((optionExtKey) => {
+  let finalSelectorSet = optionExtractionKeys.map((optionExtKey, opexKeyIndex) => {
     let ov_attribute_array = Array.from(optionExtKey.ov_attribute);
     let fs_cand = optionExtKey.fs_cand;
 
@@ -261,19 +262,22 @@ function generateSelectorsfromOpexKeys(optionExtractionKeys) {
 
       let optionValuesInAxis = optionExtKey.optionAxis;
 
-      for (let optionValue of optionValuesInAxis) {
-        const attributeSelector = `[${ov_attribute}="${CSS.escape(
+      for (let i = 0; i < optionValuesInAxis.length; i++) {
+        let optionValue = optionValuesInAxis[i];
+        let attributeSelector = `[${ov_attribute}="${CSS.escape(
           optionValue
         )}"]`;
 
-        let matches = [...fs_cand.querySelectorAll(attributeSelector)];
         let el;
-        if(!globalFlagForCacheUse){
+        if (!globalCacheData) {
+          let matches = [...fs_cand.querySelectorAll(attributeSelector)];
           el = matches.find(node => !rejectedSelectorWrapper.has(node));
         } else {
-          el = matches.find(node => !node.querySelector(attributeSelector));
+          const { input_selector_types } = globalCacheData;
+          attributeSelector = input_selector_types[opexKeyIndex] + attributeSelector;
+          el = fs_cand.querySelector(attributeSelector);
         }
-          
+
         if (el) selectorSet.add(el);
       }
 
@@ -313,6 +317,7 @@ function generateSelectorsfromOpexKeys(optionExtractionKeys) {
     return dedupedResult;
   });
 
+  console.log({finalSelectorSet});
   return finalSelectorSet;
 }
 
@@ -337,6 +342,16 @@ function extractFinalSelectors(selector_set) {
 
   for (const optionAxisObject of selector_set) {
     const entries = Object.entries(optionAxisObject);
+
+    if (!entries.length) {
+      console.warn({
+        Control_Function: "extractFinalSelectors()",
+        error: "current option axis is empty",
+        data: selector_set,
+        entries
+      })
+      return null;
+    }
 
     // phase 1: only one candidate → accept without testing
     if (entries.length === 1) {
@@ -380,6 +395,15 @@ function extractFinalSelectors(selector_set) {
     // phase 2.2 : all selector sets are invisible, choose the best one
     else {
       finalSelectorSet = returnBestSelectorSet(invisibleSelectorSet);
+    }
+
+    if (!finalSelectorSet) {
+      console.warn({
+        Control_Function: "extractFinalSelectors()",
+        error: "could not extract selectors for current option axis",
+        data: optionAxisObject
+      })
+      return null;
     }
 
     finalSelectorSet = {
@@ -435,6 +459,14 @@ function returnBestSelectorSet(selectorSetArray) {
     "path"
   ];
 
+  if (!selectorSetArray.length) {
+    console.warn({
+      Control_Function: "returnBestSelectorSet()",
+      error: "selectorSetArray is empty",
+    })
+    return null;
+  }
+
   let selectorCandidatesList = selectorSetArray.map((selectorSet, index) => {
     return {
       selectorRep: selectorSet.selectors[0].tagName.toLowerCase(),
@@ -476,7 +508,8 @@ function isValidVariantPicker(
   vp_candidate,
   optionCount,
   optionValuesRack,
-  OPTION_VALUE_ATTRIBUTES
+  OPTION_VALUE_ATTRIBUTES,
+  matchedAxisIndices
 ) {
   /** DESCRIPTION:
    * Validates whether a candidate variant picker is legitimate.
@@ -588,7 +621,7 @@ function isValidVariantPicker(
   let axisOccupied = new Array(optionCount).fill(false);
   let fs_candidates = vp_candidate.option_wrappers;
   // let one2oneMappingDetected = false;
-
+  console.log({optionValuesRack});
   for (
     let fs_cand_index = 0;
     fs_cand_index < vp_candidate.option_wrappers.length;
@@ -636,8 +669,8 @@ function isValidVariantPicker(
 
       if (selectorYieldingOVAList.length > 0) {
         if (!axisOccupied[optionAxisIndex] && fieldSetMap[fs_cand_index] === -1) {
-          // one2oneMappingDetected = true;
-          fieldSetMap[fs_cand_index] = optionAxisIndex;
+          // fieldSetMap[fs_cand_index] = optionAxisIndex;
+          fieldSetMap[fs_cand_index] = matchedAxisIndices[optionAxisIndex];
           axisOccupied[optionAxisIndex] = true;
           // selector_yielding_ova_perFsCand.push(selectorYieldingOVAList);
           selector_yielding_ova_perFsCand[fs_cand_index] = selectorYieldingOVAList;
@@ -1525,6 +1558,7 @@ function run_TA7WithCache(variantPickerCache) {
     searchNode,
     variantIdField,
     leafNodeAttributeSelectorsArr,
+    input_selector_types,
     effectiveOptionValueRack,
     effectiveOptionCount,
     encodingIndex,
@@ -1535,11 +1569,11 @@ function run_TA7WithCache(variantPickerCache) {
   } = variantPickerCache;
 
   rejectedSelectorWrapper = new WeakSet();
-  globalFlagForCacheUse = true;
+  globalCacheData = { input_selector_types };
 
   function failCache(reason, extra = {}) {
     console.error("[TA7 CACHE FAIL]", reason, extra);
-    globalFlagForCacheUse = false;
+    globalCacheData = null;
     return null;
   }
 
@@ -1623,6 +1657,7 @@ function run_TA7WithCache(variantPickerCache) {
     effectiveOptionCount,
     effectiveOptionValueRack,
     finalOVAArrayUsed,
+    matchedAxisIndices
   );
 
   if (!vp_validation_data) {
@@ -1640,16 +1675,46 @@ function run_TA7WithCache(variantPickerCache) {
   );
 
   if (!selectorResult) {
-    return failCache("getCorrectVariantPickerWithSelectors failed");
+    return failCache("Failed to generate selector data in cache mode");
+  }
+  let {selector_data} = selectorResult;
+  if( !selector_data || !selector_data.length || selector_data.some(selArray => !selArray.length)){
+    return failCache("Failed to generate proper selector data", {selector_data});
   }
 
-  /* 7. Safety check */
-  if (!matchedAxisIndices || matchedAxisIndices.length !== effectiveOptionCount) {
-    return failCache("matchedAxisIndices mismatch", {
-      matchedAxisIndices,
-      effectiveOptionCount,
-    });
+  let finalVariantPicker = {
+    variantPicker: variant_picker,
+    option_wrappers: variant_picker.option_wrappers,
+    selectors: selectorResult.selector_data,
+    encodingIndex,
+    variantIdField,
+    matchedAxisIndices,
+    vp_validation_data,
+  };
+
+
+  let areAllActiveSelectorsFound = finalVariantPicker.matchedAxisIndices.some(matchedAxisIdx => {
+    let matchingWrapperIndex = finalVariantPicker.vp_validation_data.fieldSet ? 0 : finalVariantPicker.vp_validation_data.fieldSetMap.findIndex(idx => idx === matchedAxisIdx);
+    let selectorArraytoCompare = finalVariantPicker.selectors.find((_, idx) => idx === matchingWrapperIndex);
+    let optionAxistoCompare = productOptions.find((_, idx) => idx === matchedAxisIdx).values[encodingIndex]
+
+    if (optionAxistoCompare.length !== selectorArraytoCompare.selectors.length) {
+      console.warn({
+        Control_Function: "run_TA7()",
+        error: "Could not get all selectors for some optionAxis",
+        optionAxistoCompare,
+        selectorArraytoCompare
+      })
+      return false;
+    }
+
+    return true;
+  })
+
+  if (!areAllActiveSelectorsFound) {
+    return fail("Could not get all selectors for some optionAxis");
   }
+
 
   let option_wrappers_with_selectors = makeOptionWrappersWithSelectors(
     {
@@ -1664,16 +1729,8 @@ function run_TA7WithCache(variantPickerCache) {
     return failCache("makeOptionWrappersWithSelectors returned empty");
   }
 
-  /* SUCCESS PATH */
-  let finalVariantPicker = {
-    variantPicker: variant_picker,
-    option_wrappers: variant_picker.option_wrappers,
-    selectors: selectorResult.selector_data,
-    variantIdField,
-    matchedAxisIndices,
-    option_wrappers_with_selectors,
-    make_a_selection_required: option_wrappers_with_selectors.some(ow => ow.make_a_selection_required),
-  };
+  finalVariantPicker.option_wrappers_with_selectors = option_wrappers_with_selectors;
+  finalVariantPicker.make_a_selection_required = option_wrappers_with_selectors.some(ow => ow.make_a_selection_required);
 
   let valueAttributesUsed = new Set(option_wrappers_with_selectors.map(ow => ow.value_attribute));
   finalVariantPicker.attribute_name =
@@ -1800,18 +1857,20 @@ async function test(getFullData = true) {
   let effectiveOptionCount;
   let finalOVAArrayUsed;
   let encodingIndex;
+  let selectorResult;
 
   for (const item of variantPickerGenData) {
     const vpValidationData = isValidVariantPicker(
       item.variant_picker,
       item.optionCount,
       item.optionValueRack,
-      item.OPTION_VALUE_ATTRIBUTES
+      item.OPTION_VALUE_ATTRIBUTES,
+      item.matchedAxisIndices
     );
 
     if (!vpValidationData) continue;
 
-    const selectorResult = getCorrectVariantPickerWithSelectors(
+    selectorResult = getCorrectVariantPickerWithSelectors(
       item.variant_picker,
       item.optionCount,
       item.optionValueRack,
@@ -1820,14 +1879,16 @@ async function test(getFullData = true) {
       vpValidationData
     );
 
-    if (!selectorResult) continue;
+    let {selector_data} = selectorResult;
+    if (!selector_data || !selector_data.length || !selector_data.some(selArray => !selArray.length)) continue;
 
     finalVariantPicker = {
       variantPicker: item.variant_picker.variantPicker,
       option_wrappers: item.variant_picker.option_wrappers,
-      selectors: selectorResult.selector_data,
+      // selectors: selectorResult.selector_data,
       encodingIndex: item.encodingIndex,
-      matchedAxisIndices: item.matchedAxisIndices
+      matchedAxisIndices: item.matchedAxisIndices,
+      vpValidationData,
     };
 
     effectiveOptionValueRack = item.optionValueRack;
@@ -1836,7 +1897,7 @@ async function test(getFullData = true) {
     encodingIndex = item.encodingIndex
 
     //debug:
-    console.log({ vpValidationData });
+    console.log({ vpValidationData, finalVariantPicker });
 
     break;
   }
@@ -1844,13 +1905,51 @@ async function test(getFullData = true) {
   /* ----------------------------------
      6. Failure exit (guaranteed shape)
   ---------------------------------- */
-
+  console.log({ finalVariantPicker });
   if (!finalVariantPicker) {
     return fail("Final variant picker could not be resolved");
   }
 
+  let {selector_data} = selectorResult;
+  console.log({selectorResult});
+  if( !selector_data || !selector_data.length || selector_data.some(object => !object.selectors.length)){
+    return fail("Failed to generate proper selector data", {selector_data});
+  }
+
+
+  let areAllActiveSelectorsFound = finalVariantPicker.matchedAxisIndices.every(matchedAxisIdx => {
+    let matchingWrapperIndex = finalVariantPicker.vpValidationData.fieldSet ? 0 : finalVariantPicker.vpValidationData.fieldSetMap.findIndex(idx => idx === matchedAxisIdx);
+    let selectorArraytoCompare = finalVariantPicker.selectors[matchingWrapperIndex];
+    let optionAxistoCompare = product.options[matchedAxisIdx].values[encodingIndex];
+
+    if (optionAxistoCompare.length !== selectorArraytoCompare.selectors.length) {
+      console.warn({
+        Control_Function: "run_TA7()",
+        error: "Could not get all selectors for some optionAxis",
+        optionAxistoCompare,
+        selectorArraytoCompare
+      })
+      return false;
+    }
+
+    return true;
+  })
+
+  if (!areAllActiveSelectorsFound) {
+    return fail("Could not get all selectors for some optionAxis");
+  }
+
+
+  /* --------------------------------------------------------------------
+     7. Building list of references from variant picker upto the searchNode
+  -------------------------------------------------------------------- */
+  let ancestorReferences = [];
+  for (let currRef = finalVariantPicker.variantPicker; candidateObject.parent.parentElement !== currRef; currRef = currRef.parentElement) {
+    ancestorReferences.push(currRef);
+  }
+
   /* ----------------------------------
-     7. Normalization
+     8. Normalization
   ---------------------------------- */
 
   if (window.CAMOUFLAGEE) {
@@ -1877,6 +1976,7 @@ async function test(getFullData = true) {
       searchNode: candidateObject.parent,
       variantIdField: validNameIdElement,
       leafNodeAttributeSelectorsArr,
+      input_selector_types: option_wrappers_with_selectors.map(ow => ow.selector_type),
       effectiveOptionValueRack,
       effectiveOptionCount,
       encodingIndex,
@@ -1891,6 +1991,7 @@ async function test(getFullData = true) {
     attribute_name,
     variantIdField: validNameIdElement,
     observer_container_node: candidateObject.parent,
+    ancestorReferences,
     addToCartButton: candidateObject.addToCartButton,
     z__camouflage_selectors:
       finalVariantPicker.camouflage_selectors ||

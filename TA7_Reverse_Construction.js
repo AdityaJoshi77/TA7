@@ -9,7 +9,7 @@ let globalCacheData = null;
 // Most shopify themes need an html element which will hold the id of the current variant
 // for the add-to-cart / buy form submission.
 // If this is found, we proceed ahead, if not, we revert to manual extraction.
-function findAnchorProductForm() {
+function findNameIdElement2(productId) {
   /** DESCRIPTION:
    * Attempts to locate the product form that controls variant selection.
    *
@@ -40,15 +40,94 @@ function findAnchorProductForm() {
     };
   }
 
+  const id = String(productId);
 
-  // DEPRECATED: 
-  // const productFormRegex = /product[-_]*.*[-_]*form/i;
-  // const validNameIdElement = anchors.find((el) => {
-  //   anchorProductForm = findClosestRegexMatchedAncestor(el, productFormRegex);
-  //   return Boolean(anchorProductForm);
-  // });
+  function elementContainsProductId(root) {
 
-  const validNameIdElement = anchors.find(anchor => isElementVisible(anchor.parentElement))
+    const nodes = [root, ...root.querySelectorAll("*")];
+
+    return nodes.some(el => {
+      for (const attr of el.attributes) {
+        if (attr.value.includes(id)) return true;
+      }
+      return false;
+    });
+  }
+
+  // First pass (parent-level validation)
+  let validNameIdElement = anchors.find(anchor => {
+    const parent = anchor.parentElement;
+    if (!parent || !isElementVisible(parent)) return false;
+
+    return elementContainsProductId(anchor) ||
+      elementContainsProductId(parent);
+  });
+
+  // Brutal fallback (walk ancestors)
+  if (!validNameIdElement) {
+
+    validNameIdElement = anchors.find(anchor => {
+
+      let node = anchor.parentElement?.parentElement;
+      let ceiling = 5, level = 0;
+      while (node && node !== document.body && level < ceiling) {
+
+        if (elementContainsProductId(node)) {
+          return true;
+        }
+
+        node = node.parentElement;
+        level++;
+      }
+
+      return false;
+    });
+  }
+
+  return {
+    validNameIdElement,
+    nameIdAnchors: anchors,
+  };
+}
+
+function findNameIdElement(productId) {
+
+  function findProductIdMatch(node, id) {
+    for (let attr of node.attributes)
+      if (attr.value.includes(id))
+        return true;
+    return false;
+  }
+
+  const id = String(productId);
+
+  const anchors = Array.from(
+    document.querySelectorAll('[name="id"]')
+  );
+
+  console.log({ anchors });
+
+  let validNameIdElement = anchors.find(anchor => isElementVisible(anchor.parentElement) && (findProductIdMatch(anchor, id)
+  || findProductIdMatch(anchor.parentElement, id)
+  || Array.from(anchor.parentElement.querySelectorAll('*')).some(child => findProductIdMatch(child, id))));
+
+  if (!validNameIdElement) {
+    const productIdMatches = Array.from(document.querySelectorAll('*')).filter(node => {
+      for (const attr of node.attributes) {
+        if (attr.value.includes(id)) return true;
+      }
+      return false;
+    });
+
+    validNameIdElement = anchors.find(anchor =>
+      productIdMatches.some(pim =>
+        (pim === anchor) || pim.contains(anchor) || anchor.contains(pim) || anchor.parentElement.contains(pim) || pim.parentElement.contains(anchor)
+      )
+    );
+  }
+
+
+  console.log({ validNameIdElement });
 
   return {
     validNameIdElement,
@@ -975,7 +1054,7 @@ function isPureLeaf(node, attrSelector) {
     rejectedSelectorWrapper.add(node);
     return false;
   }
-  
+
   if (!isElementVisible(node.parentElement)) {
     console.log({ node, message: "selector is not visible" });
     return false;
@@ -1798,31 +1877,16 @@ async function test(getFullData = true) {
   ---------------------------------- */
   rejectedSelectorWrapper = new WeakSet();
 
-  /* ----------------------------------
-     1. Anchor product form
-  ---------------------------------- */
-
-  const anchorProductFormData = findAnchorProductForm();
-  let { nameIdAnchors, validNameIdElement } =
-    anchorProductFormData;
-
-  if (!validNameIdElement) {
-    return fail("valid [name = id] element not found");
-  }
-
-  targetData.C__anchorData = {
-    nameIdElement: validNameIdElement,
-    nameIdAnchors,
-  };
 
   /* ----------------------------------
-     2. Product data
+     1. Product data
   ---------------------------------- */
 
   let product = null;
 
   if (window.CAMOUFLAGEE) {
     product = {
+      id: window.CAMOUFLAGEE.items[0].product.id,
       options:
         window.CAMOUFLAGEE.items[0].product.options_with_values.map(
           (option) => ({
@@ -1838,6 +1902,7 @@ async function test(getFullData = true) {
     const productData = await getProductData();
 
     product = {
+      id : productData.id,
       options: productData.options.map((option) => ({
         name: option.name,
         values: [option.values],
@@ -1849,13 +1914,31 @@ async function test(getFullData = true) {
   }
 
   const originalOptionCount = product.options.length;
-  console.log({ productOptions: product.options, originalOptionCount });
+  console.log({ product, productOptions: product.options, originalOptionCount });
+
+  /* ----------------------------------
+     1. Anchor product form
+  ---------------------------------- */
+
+  const anchorProductFormData = findNameIdElement(product.id);
+  let { nameIdAnchors, validNameIdElement } =
+    anchorProductFormData;
+
+  if (!validNameIdElement) {
+    return fail("valid [name = id] element not found");
+  }
+
+  targetData.C__anchorData = {
+    nameIdElement: validNameIdElement,
+    nameIdAnchors,
+  };
+
 
   /* ----------------------------------
      3. Stable parent discovery
   ---------------------------------- */
 
-  const candidateObject = getParentNodeForVPCSearch(validNameIdElement, 5, false);
+  const candidateObject = getParentNodeForVPCSearch(validNameIdElement, 7, false);
 
   targetData.B__parentNodeForVPCSearch = {
     searchNode: candidateObject.parent,
